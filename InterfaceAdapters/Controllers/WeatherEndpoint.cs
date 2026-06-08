@@ -1,13 +1,14 @@
 // ============================================================================
-// LAYER 4 — Frameworks & Drivers (the outermost layer)
+// LAYER 3 — Interface Adapters
 // ============================================================================
-// WeatherEndpoint is tied to ASP.NET ([ApiController], ControllerBase). That
-// framework coupling is fine HERE, because this is the outermost layer — the
-// place where the web framework is allowed to leak in.
+// WeatherEndpoint is a CONTROLLER — the classic Interface Adapter on the INPUT
+// side. Its only job is translation: receive the HTTP request and turn it into
+// a use-case call (it contains NO business logic itself).
 //
-// Its only job is translation: receive the HTTP request, call the business
-// logic through the IWeatherService contract, and shape the result into JSON.
-// It contains NO business logic itself.
+// It does reference ASP.NET ([ApiController], ControllerBase) — but in the
+// strict layout the controller is still an Interface Adapter; the actual web
+// FRAMEWORK (the Kestrel host, routing, DI wiring) is what lives in the
+// Frameworks layer, i.e. Program.cs and the NuGet packages.
 //
 // The Dependency Rule in action:
 //   WeatherEndpoint --> IWeatherService --> IWeatherRepository
@@ -18,7 +19,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WeatherAPI.UseCases;
 
-namespace WeatherAPI.Frameworks
+namespace WeatherAPI.InterfaceAdapters
 {
 	[ApiController]
 	[Route("api/weather")]
@@ -38,8 +39,7 @@ namespace WeatherAPI.Frameworks
 		public IActionResult GetTemperature()
 		{
 			int temperature = _service.GetTemperature();
-			// Wrap the int in an anonymous object so the JSON comes out as
-			// { "temperature": 22 } instead of just a bare number.
+			// Wrap the bare int so the JSON comes out as { "temperature": 22 }.
 			return Ok(new { temperature });
 		}
 	}

@@ -1,18 +1,16 @@
 // ============================================================================
-// LAYER 3 — Interface Adapters
+// LAYER 2 — Application Business Rules (Use Cases)
 // ============================================================================
-// WeatherService implements the IWeatherService contract. It is where the
-// actual business logic lives: figure out the current season, ask the
-// repository for that season's range, and pick a random value inside it.
+// WeatherService is the USE CASE INTERACTOR — the doer that carries out the use
+// case. It KEEPS the IWeatherService input port (implements it) and USES the
+// IWeatherRepository port to get data. The work: find the current season, get
+// its range, pick a random value inside it.
 //
-// Note the constructor: it receives an IWeatherRepository (the INTERFACE),
-// never the concrete WeatherRepository. This is "constructor injection".
-// The class has no idea where the data really comes from, so it stays
-// decoupled from the storage details — dependencies point INWARD only.
-using WeatherAPI.Models;    // needed for the Temperature entity used below
-using WeatherAPI.UseCases;
+// Pure logic — no ASP.NET, no database. The repository arrives via the
+// constructor (constructor injection), so it never knows where data comes from.
+using WeatherAPI.Models;
 
-namespace WeatherAPI.InterfaceAdapters
+namespace WeatherAPI.UseCases
 {
 	public class WeatherService : IWeatherService
 	{

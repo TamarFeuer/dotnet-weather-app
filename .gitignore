@@ -480,3 +480,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# SQLite database files (generated at runtime by EnsureCreated; not source)
+weather.db
+*.db-shm
+*.db-wal

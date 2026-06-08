@@ -1,0 +1,6 @@
+[
+  { "season": "Summer", "minTemp": 17, "maxTemp": 25 },
+  { "season": "Autumn", "minTemp": 8,  "maxTemp": 14 },
+  { "season": "Spring", "minTemp": 8,  "maxTemp": 15 },
+  { "season": "Winter", "minTemp": 2,  "maxTemp": 8  }
+]
