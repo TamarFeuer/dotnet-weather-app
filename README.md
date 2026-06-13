@@ -93,10 +93,9 @@ cd weather-backend
 dotnet run
 ```
 
-Then open:
+Then test it in your browser:
 
-- `http://localhost:5151/swagger` - interactive test page
-- `http://localhost:5151/api/weather/temperature?month=July` - the raw JSON
+- `http://localhost:5151/api/weather/temperature?month=July`
 
 Frontend, from `weather-frontend/`:
 

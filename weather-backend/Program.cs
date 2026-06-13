@@ -17,10 +17,6 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // Register the MVC controllers (this is what makes WeatherEndpoint reachable).
 builder.Services.AddControllers();
 
-// Swagger? is an interactive web page (at /swagger) for testing the API from the browser
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
 // CORS: let the Angular dev server (a different origin) call this API. Without
 // this, the browser blocks requests coming from http://localhost:4200.
 const string AngularDev = "AllowAngular";
@@ -64,14 +60,6 @@ using (IServiceScope scope = app.Services.CreateScope())
 {
     WeatherDbContext db = scope.ServiceProvider.GetRequiredService<WeatherDbContext>();
     db.Database.EnsureCreated();
-}
-
-// Note we only turn the UI on during development. You usually don't expose
-// that test page to the public in production — it's a developer tool.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();     // serves the swagger.json document
-    app.UseSwaggerUI();   // serves the interactive web page built from it
 }
 
 app.UseCors(AngularDev);   // apply the CORS policy (must come before MapControllers)
