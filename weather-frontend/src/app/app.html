@@ -1,4 +1,14 @@
 <main class="page">
-  <h1>Weather in the Netherlands</h1>
-  <p>Pick a month to see a likely temperature,<br>based on its usual min-max range.</p>
+	<h1>Weather in the Netherlands</h1>
+	<p>Pick a month to see a likely temperature,<br>based on its usual min-max range.</p>
+
+	<!-- The dropdown. @for is Angular's built-in loop: it reads the component's
+	     `months` array (from app.ts) and creates one <option> per month. `track`
+	     tells Angular how to identify each item. {{ month }} prints the name. -->
+	<select>
+		<option value="" disabled selected>Choose a month</option>
+		@for (month of months; track month) {
+			<option [value]="month">{{ month }}</option>
+		}
+	</select>
 </main>
