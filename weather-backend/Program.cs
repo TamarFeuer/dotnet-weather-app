@@ -21,6 +21,17 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// CORS: let the Angular dev server (a different origin) call this API. Without
+// this, the browser blocks requests coming from http://localhost:4200.
+const string AngularDev = "AllowAngular";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(AngularDev, policy =>
+        policy.WithOrigins("http://localhost:4200")
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
+
 // --- The actual wiring of the architecture ---------------------------------
 // "When something asks for IWeatherRepository, give it a WeatherRepository."
 // "When something asks for IWeatherService, give it a WeatherService."
@@ -63,6 +74,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();   // serves the interactive web page built from it
 }
 
+app.UseCors(AngularDev);   // apply the CORS policy (must come before MapControllers)
 app.MapControllers();   // hooks the controller routes into the request pipeline
 app.Run();
 
