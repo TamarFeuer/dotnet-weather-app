@@ -1,8 +1,7 @@
 // ============================================================================
-// LAYER 4 — Frameworks & Drivers (the outermost layer)
+// REPOSITORY - EF Core database context
 // ============================================================================
-// WeatherDbContext is EF Core's representation of the database. It is pure
-// framework/technology, so it belongs here in the outermost layer.
+// WeatherDbContext is EF Core's representation of the database.
 //
 // - DbSet<Temperature> Temperatures  =  the "Temperatures" TABLE.
 // - Each Temperature object           =  one ROW.
@@ -13,7 +12,7 @@
 using Microsoft.EntityFrameworkCore;
 using WeatherAPI.Models;
 
-namespace WeatherAPI.Frameworks
+namespace WeatherAPI.Repository
 {
 	public class WeatherDbContext : DbContext
 	{

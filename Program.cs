@@ -1,17 +1,12 @@
 // ============================================================================
-// THE COMPOSITION ROOT
+// STARTUP - wiring (the composition root)
 // ============================================================================
-// Program.cs is the one special place in Clean Architecture where the
-// Dependency Rule is deliberately relaxed. Everywhere else, classes depend
-// only on the INTERFACES from the inner layers. But SOMEONE has to decide
-// which concrete class implements each interface — and that decision is made
-// here, at the outermost edge of the app, when it starts up.
-//
-// That is why this file is allowed to reference every layer at once.
+// Program.cs is where the app is wired up at startup. Everywhere else, classes
+// depend only on interfaces; here is where we decide which concrete class
+// implements each one (which service, which repository, which storage driver).
 using Microsoft.EntityFrameworkCore;  // UseSqlite, EnsureCreated
-using WeatherAPI.UseCases;          // interfaces + WeatherService (Layer 2)
-using WeatherAPI.InterfaceAdapters; // controller, gateway, presenter, DTO (Layer 3)
-using WeatherAPI.Frameworks;        // data-source drivers + DbContext (Layer 4)
+using WeatherAPI.Service;             // IWeatherService, WeatherService
+using WeatherAPI.Repository;          // repository, data-source port, drivers, DbContext
 
 
 // This call is also what creates the Kestrel web server — the thing that
@@ -33,17 +28,17 @@ builder.Services.AddSwaggerGen();
 //   WeatherEndpoint <- IWeatherService <- IWeatherRepository
 //
 // AddScoped = create one instance per HTTP request (the standard choice for
-// web APIs). The inner layers never see these lines — they only ever know
+// web APIs). The other classes never see these lines; they only ever know
 // about the interfaces.
 // Register EF Core's DbContext, pointed at a local SQLite file (weather.db).
-// This is the "database engine" wiring — pure Frameworks-layer concern.
+// This is the database engine wiring.
 builder.Services.AddDbContext<WeatherDbContext>(options =>
     options.UseSqlite("Data Source=weather.db"));
 
 // --- THE ONE-LINE DRIVER SWAP ---
-// The gateway depends only on the ISeasonDataSource PORT. We choose which
-// DRIVER fills it here. Comment one line, uncomment the other — nothing else
-// in the app changes.
+// WeatherRepository depends only on the ISeasonDataSource interface. We choose
+// which driver fills it here. Comment one line, uncomment the other - nothing
+// else in the app changes.
 // builder.Services.AddScoped<ISeasonDataSource, JsonSeasonDataSource>();  // file
 builder.Services.AddScoped<ISeasonDataSource, SqlSeasonDataSource>();        // SQLite
 builder.Services.AddScoped<IWeatherRepository, WeatherRepository>();

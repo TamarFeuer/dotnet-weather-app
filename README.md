@@ -8,20 +8,17 @@ JSON file or a SQLite database - swappable with one line.
 GET /api/weather/temperature  ->  { "temperature": 21 }
 ```
 
-## The four layers
+## Project structure
 
-Each folder is one ring of the Clean Architecture diagram (🟡 → 🔴 → 🟢 → 🔵),
-with dependencies pointing **inward** only.
+Four folders, organized by responsibility, with the request flowing
+Controller → Service → Repository (Models is the shared data type):
 
-![WeatherAPI Clean Architecture layers - Models (Enterprise Business Rules):
-Temperature.cs; UseCases (Application Business Rules): Ports/IWeatherService.cs,
-Ports/IWeatherRepository.cs, Interactors/WeatherService.cs; InterfaceAdapters
-(Interface Adapters): Controllers/WeatherEndpoint.cs, Gateways/WeatherRepository.cs,
-Ports/ISeasonDataSource.cs; Frameworks (Frameworks & Drivers): Sql/WeatherDbContext.cs,
-Sql/SqlSeasonDataSource.cs, Json/JsonSeasonDataSource.cs, Json/seasons.json](docs/architecture-layers.png)
-
-Within each layer, **promises (interfaces) live in `Ports/`** and **doers
-(classes) live in role folders** (`Interactors/`, `Controllers/`, `Gateways/`).
+![WeatherAPI project structure - Controller/ (API, HTTP endpoint):
+WeatherEndpoint.cs; Service/ (business logic): WeatherService.cs,
+IWeatherService.cs; Repository/ (data access): WeatherRepository.cs,
+IWeatherRepository.cs, ISeasonDataSource.cs, WeatherDbContext.cs,
+SqlSeasonDataSource.cs, JsonSeasonDataSource.cs, seasons.json; Models/
+(data model): Temperature.cs](docs/clean_architecture.png)
 
 ## How a request flows
 
@@ -42,8 +39,8 @@ request arrives.
 7. `WeatherRepository` calls `_dataSource.GetAll()` (the chosen driver).
 8. `SqlSeasonDataSource` → EF Core → `SELECT * FROM Temperatures` →
    `weather.db` → `Temperature` rows.
-9. Gateway picks the Summer row (17-25); `WeatherService` rolls a random value
-   inside it and returns the `int`.
+9. `WeatherRepository` picks the Summer row (17-25); `WeatherService` rolls a
+   random value inside it and returns the `int`.
 10. Controller wraps it as `{ "temperature": N }`; Kestrel sends the JSON back.
 
 Quick view of the call chain:
@@ -56,8 +53,8 @@ WeatherRepository → SqlSeasonDataSource → weather.db
 ```
 Kestrel             = web server
 WeatherEndpoint     = controller
-WeatherService      = interactor
-WeatherRepository   = gateway
+WeatherService      = service (business logic)
+WeatherRepository   = repository (data access)
 SqlSeasonDataSource = chosen driver
 weather.db          = database
 ```
@@ -72,10 +69,10 @@ Both drivers sit behind the same `ISeasonDataSource` port. Pick one in
 builder.Services.AddScoped<ISeasonDataSource, SqlSeasonDataSource>();      // SQLite (default)
 ```
 
-Nothing else in the app changes - the controller, use case, and gateway never
-know which storage is behind the port.
+Nothing else in the app changes - the controller, service, and repository
+never know which storage is behind the port.
 
-- **JSON driver** reads `Frameworks/Json/seasons.json`.
+- **JSON driver** reads `Repository/seasons.json`.
 - **SQLite driver** uses EF Core; the database file `weather.db` is created and
   seeded automatically on startup by `EnsureCreated()`.
 

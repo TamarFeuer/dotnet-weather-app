@@ -1,16 +1,16 @@
 // ============================================================================
-// LAYER 2 — Application Business Rules (Use Cases)
+// SERVICE - business logic
 // ============================================================================
-// WeatherService is the USE CASE INTERACTOR — the doer that carries out the use
-// case. It KEEPS the IWeatherService input port (implements it) and USES the
-// IWeatherRepository port to get data. The work: find the current season, get
-// its range, pick a random value inside it.
+// WeatherService does the work: find the current season, get its range, and
+// pick a random value inside it. It implements IWeatherService and uses
+// IWeatherRepository to get data.
 //
-// Pure logic — no ASP.NET, no database. The repository arrives via the
+// Pure logic - no ASP.NET, no database. The repository arrives via the
 // constructor (constructor injection), so it never knows where data comes from.
 using WeatherAPI.Models;
+using WeatherAPI.Repository;
 
-namespace WeatherAPI.UseCases
+namespace WeatherAPI.Service
 {
 	public class WeatherService : IWeatherService
 	{

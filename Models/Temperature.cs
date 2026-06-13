@@ -1,9 +1,9 @@
 // ============================================================================
-// LAYER 1 — Enterprise Business Rules (the innermost layer)
+// MODELS - data model
 // ============================================================================
-// Temperature is an "entity": a plain C# class with NO framework dependencies
-// (no ASP.NET, no database library, no using directives at all). Because it
-// depends on nothing, every other layer is allowed to depend on it.
+// Temperature is a plain C# class with no framework dependencies (no ASP.NET,
+// no database library). Because it depends on nothing, every other folder is
+// allowed to depend on it.
 //
 // It maps directly to a database table with four columns:
 // Id, Season, MinTemp, MaxTemp.

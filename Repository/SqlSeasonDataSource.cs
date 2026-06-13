@@ -1,16 +1,15 @@
 // ============================================================================
-// LAYER 4 — Frameworks & Drivers (the outermost layer)
+// REPOSITORY - SQLite driver
 // ============================================================================
-// SqlSeasonDataSource is a DRIVER — a doer that KEEPS the ISeasonDataSource
-// promise by querying the SQLite database (through EF Core's DbContext).
+// SqlSeasonDataSource implements ISeasonDataSource by querying the SQLite
+// database through EF Core's DbContext.
 //
-// It is the exact sibling of JsonSeasonDataSource: same promise, different
-// technology. The gateway (WeatherRepository) can't tell them apart — that is
-// the whole point of the port. Switching between them is one line in Program.cs.
-using WeatherAPI.InterfaceAdapters;
+// It is the sibling of JsonSeasonDataSource: same contract, different storage.
+// WeatherRepository can't tell them apart - switching between them is one line
+// in Program.cs.
 using WeatherAPI.Models;
 
-namespace WeatherAPI.Frameworks
+namespace WeatherAPI.Repository
 {
 	public class SqlSeasonDataSource : ISeasonDataSource
 	{

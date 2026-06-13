@@ -1,25 +1,16 @@
 // ============================================================================
-// LAYER 3 — Interface Adapters
+// CONTROLLER - API (HTTP endpoint)
 // ============================================================================
-// WeatherEndpoint is a CONTROLLER — the classic Interface Adapter on the INPUT
-// side. Its only job is translation: receive the HTTP request and turn it into
-// a use-case call (it contains NO business logic itself).
-//
-// It does reference ASP.NET ([ApiController], ControllerBase) — but in the
-// strict layout the controller is still an Interface Adapter; the actual web
-// FRAMEWORK (the Kestrel host, routing, DI wiring) is what lives in the
-// Frameworks layer, i.e. Program.cs and the NuGet packages.
-//
-// The Dependency Rule in action:
-//   WeatherEndpoint --> IWeatherService --> IWeatherRepository
-// Every arrow points inward, toward the abstractions, never the reverse.
+// WeatherEndpoint receives the HTTP request and turns it into a service call.
+// Its only job is translation; it holds no business logic. It calls the service
+// through the IWeatherService interface, never the concrete class.
 //
 // Endpoint:  GET /api/weather/temperature
 //   -> { "temperature": 22 }
 using Microsoft.AspNetCore.Mvc;
-using WeatherAPI.UseCases;
+using WeatherAPI.Service;
 
-namespace WeatherAPI.InterfaceAdapters
+namespace WeatherAPI.Controller
 {
 	[ApiController]
 	[Route("api/weather")]

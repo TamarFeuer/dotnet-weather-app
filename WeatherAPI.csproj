@@ -15,7 +15,7 @@
   <!-- The "database": copy seasons.json next to the built app so the JSON
        data-source driver can read it at runtime. -->
   <ItemGroup>
-    <None Update="Frameworks/Json/seasons.json">
+    <None Update="Repository/seasons.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
