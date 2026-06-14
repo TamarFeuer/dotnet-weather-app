@@ -6,7 +6,7 @@
 // through the IWeatherService interface, never the concrete class.
 //
 // Endpoint:  GET /api/weather/temperature?month=January
-//   -> { "temperature": 4 }
+//   -> { "minTemp": 1, "maxTemp": 6, "average": 3, "description": "Freezing" }
 using Microsoft.AspNetCore.Mvc;
 using WeatherAPI.Service;
 
@@ -16,7 +16,7 @@ namespace WeatherAPI.Controller
 	[Route("api/weather")]
 	public class WeatherEndpoint : ControllerBase
 	{
-		// Injected via the IWeatherService interface — the endpoint never
+		// Injected via the IWeatherService interface - the endpoint never
 		// references the concrete WeatherService class.
 		private readonly IWeatherService _service;
 
@@ -32,11 +32,12 @@ namespace WeatherAPI.Controller
 			if (string.IsNullOrWhiteSpace(month))
 				return BadRequest(new { error = "Provide a month, e.g. ?month=January" });
 
-			int? temperature = _service.GetTemperature(month);
-			if (temperature is null)
+			WeatherInfo? info = _service.GetWeather(month);
+			if (info is null)
 				return NotFound(new { error = $"Unknown month '{month}'." });
 
-			return Ok(new { temperature });
+			// Returns { minTemp, maxTemp, average, description } as JSON.
+			return Ok(info);
 		}
 	}
 }
