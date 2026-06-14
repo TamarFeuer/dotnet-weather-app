@@ -2,17 +2,9 @@
 	<h1>Weather in the Netherlands</h1>
 	<p>Pick a month to see its typical weather.</p>
 
-	<!-- The dropdown. @for is Angular's built-in loop: it reads the component's
-	     `months` array (from app.ts) and creates one <option> per month. `track`
-	     tells Angular how to identify each item. {{ month }} prints the name. -->
-	<!-- #monthSelect refers to this <select>, so monthSelect.value is the chosen
-	     month. (change) calls onMonthSelected() each time the selection changes. -->
-	<select #monthSelect (change)="onMonthSelected(monthSelect.value)">
-		<option value="" disabled selected>Choose a month</option>
-		@for (month of months; track month) {
-			<option [value]="month">{{ month }}</option>
-		}
-	</select>
+	<!-- The month dropdown is now its own component. It emits the chosen month
+	     via (monthSelected); we forward that to onMonthSelected(). -->
+	<app-month-picker (monthSelected)="onMonthSelected($event)" />
 
 	<!-- @if is Angular's built-in conditional: only shows once we have data.
 	     "as w" names the signal's value so we can read its fields. When the

@@ -1,0 +1,8 @@
+<!-- When the selection changes, emit the chosen month to the parent.
+     #monthSelect is a reference to this <select>; .value is the chosen month. -->
+<select #monthSelect (change)="monthSelected.emit(monthSelect.value)">
+  <option value="" disabled selected>Choose a month</option>
+  @for (month of months; track month) {
+    <option [value]="month">{{ month }}</option>
+  }
+</select>
