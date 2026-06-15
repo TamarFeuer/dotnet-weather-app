@@ -56,7 +56,7 @@ storage driver - SQLite or the JSON file - is chosen once at startup in
 5.  onMonthSelected calls this.weather.getWeather("July")   (frontend service)
 6.  getWeather calls http.get<WeatherInfo>(apiUrl, {params:{month:"July"}})
        → returns an Observable
-7.  .subscribe(...) runs → the HTTP request actually fires
+7.  onMonthSelected subscribes to that Observable (.subscribe(...)) → the HTTP request actually fires
     ----------------- crosses to the backend -----------------
 8.  Kestrel receives GET /api/weather/temperature?month=July
        → routing → WeatherEndpoint

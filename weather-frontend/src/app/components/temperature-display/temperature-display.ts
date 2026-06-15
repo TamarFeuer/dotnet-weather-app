@@ -1,5 +1,5 @@
 import { Component, input } from '@angular/core';
-import { WeatherInfo } from './weather.service';
+import { WeatherInfo } from '../../weather.service';
 
 @Component({
   selector: 'app-temperature-display',
