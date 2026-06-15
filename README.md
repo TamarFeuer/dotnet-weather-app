@@ -43,41 +43,37 @@ SqlMonthDataSource.cs, JsonMonthDataSource.cs, months.json; Models/
 
 ## How a request flows
 
-**Stage 1 - startup (the choice):**
-`Program.cs` registers one driver for `IMonthDataSource` (currently
-`SqlMonthDataSource` = SQLite). The choice is locked in once, before any
-request arrives.
-
-**Stage 2 - the request (`GET /api/weather/temperature?month=July`):**
-
-1. Browser sends `GET /api/weather/temperature?month=July`.
-2. Kestrel receives it; routing matches `WeatherEndpoint`.
-3. DI builds the chain; for `IMonthDataSource` it builds the chosen driver
-   (`SqlMonthDataSource` + `WeatherDbContext`).
-4. Controller validates the month and calls `_service.GetWeather("July")`.
-5. `WeatherService` calls `_repository.GetByMonth("July")`.
-6. `WeatherRepository` calls `_dataSource.GetAll()` (the chosen driver).
-7. `SqlMonthDataSource` → EF Core → `SELECT * FROM Temperatures` →
-   `weather.db` → `Temperature` rows.
-8. `WeatherRepository` picks the July row (14-23); `WeatherService` computes the
-   average and a description, returning a `WeatherInfo`.
-9. Controller returns `{ minTemp, maxTemp, average, description }` as JSON;
-   Kestrel sends it back.
-
-Quick view of the call chain:
+The full path of one request, from the dropdown to the database and back. (The
+storage driver - SQLite or the JSON file - is chosen once at startup in
+`Program.cs`; see "Swapping storage" below.)
 
 ```
-Browser → Kestrel → WeatherEndpoint → WeatherService →
-WeatherRepository → SqlMonthDataSource → weather.db
-```
-
-```
-Kestrel            = web server
-WeatherEndpoint    = controller
-WeatherService     = service (business logic)
-WeatherRepository  = repository (data access)
-SqlMonthDataSource = chosen driver
-weather.db         = database
+1.  User picks a month in the dropdown
+2.  <select>'s (change) fires
+3.  MonthPicker runs monthSelected.emit("July")
+4.  App's binding (monthSelected)="onMonthSelected($event)"
+       → Angular calls App.onMonthSelected("July")
+5.  onMonthSelected calls this.weather.getWeather("July")   (frontend service)
+6.  getWeather calls http.get<WeatherInfo>(apiUrl, {params:{month:"July"}})
+       → returns an Observable
+7.  .subscribe(...) runs → the HTTP request actually fires
+    ----------------- crosses to the backend -----------------
+8.  Kestrel receives GET /api/weather/temperature?month=July
+       → routing → WeatherEndpoint
+9.  Controller calls _service.GetWeather("July")            (backend C# service)
+10. Service calls _repository.GetByMonth("July")
+11. Repository → IMonthDataSource → SqlMonthDataSource → EF Core
+       → SELECT FROM Temperatures → weather.db
+12. Repository returns the July Temperature row
+13. Service computes average + description → returns a WeatherInfo
+14. Controller returns Ok(info) → JSON { minTemp, maxTemp, average, description }
+    ----------------- response crosses back -----------------
+15. The frontend Observable emits that response object
+16. The subscribe callback runs: this.currentWeather.set(response)
+       → App's currentWeather signal now holds the WeatherInfo
+17. currentWeather changed → Angular re-renders → [info]="currentWeather()"
+       passes the value into TemperatureDisplay's input
+18. TemperatureDisplay's @if shows the range, average, description  (no F5)
 ```
 
 ## Swapping storage (JSON ↔ SQLite)

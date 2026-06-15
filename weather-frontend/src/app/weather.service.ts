@@ -14,7 +14,7 @@ export interface WeatherInfo {
 //
 // @Injectable({ providedIn: 'root' }) marks the class as a service Angular can
 // hand out, and 'root' means one shared instance for the whole app (a
-// singleton). This is Angular's dependency injection - the same idea as your
+// singleton). This is Angular's dependency injection - the same idea as 
 // C# AddScoped registrations.
 @Injectable({ providedIn: 'root' })
 export class WeatherService {
@@ -22,7 +22,7 @@ export class WeatherService {
 
 	// The other side of dependency injection: this service RECEIVES HttpClient
 	// through its constructor (Angular supplies it automatically) - exactly like
-	// constructor injection in your C# backend. We switched HttpClient on earlier
+	// constructor injection in the C# backend. We switched HttpClient on earlier
 	// with provideHttpClient().
 	constructor(private http: HttpClient) {}
 
