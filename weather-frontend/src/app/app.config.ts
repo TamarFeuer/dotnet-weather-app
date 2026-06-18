@@ -1,15 +1,20 @@
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
-import { provideStore } from '@ngrx/store';
+import { provideStore, provideState } from '@ngrx/store';
 import { provideEffects } from '@ngrx/effects';
+import { provideStoreDevtools } from '@ngrx/store-devtools';
+import { weatherReducer } from './store/weather.reducer';
 
 export const appConfig: ApplicationConfig = {
 	providers: [
 		provideBrowserGlobalErrorListeners(),
 		provideHttpClient(),
-		// NgRx: set up the (empty for now) store and the effects runner.
-		// We'll add the weather state slice and the effect in later steps.
+		// NgRx: set up the store and the effects runner.
 		provideStore(),
 		provideEffects(),
+		// Register the "weather" slice, managed by weatherReducer.
+		provideState('weather', weatherReducer),
+		// Redux DevTools: lets the browser extension show the store + actions.
+		provideStoreDevtools({ maxAge: 25, connectInZone: true, name: 'WeatherApp' }),
 	]
 };
