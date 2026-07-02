@@ -1,0 +1,8 @@
+<!-- "as d" names the day so we can read its fields. -->
+@if (day(); as d) {
+  <article class="card">
+    <p class="day">{{ label(d.date) }}</p>
+    <p class="temps">{{ d.minTemp }}&deg; / {{ d.maxTemp }}&deg;C</p>
+    <p class="condition">{{ d.condition }}</p>
+  </article>
+}

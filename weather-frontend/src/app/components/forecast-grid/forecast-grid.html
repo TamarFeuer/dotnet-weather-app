@@ -1,0 +1,14 @@
+<!-- The three states of a request, read from the store: in flight, failed, or
+     done. @for renders one DayCard per day, passing the day IN via [day]. -->
+@if (loading()) {
+  <p>Loading the forecast...</p>
+} @else if (error()) {
+  <p class="error">{{ error() }}</p>
+} @else if (days().length) {
+  <h2>5-day forecast for {{ city() }}</h2>
+  <div class="grid">
+    @for (day of days(); track day.date) {
+      <app-day-card [day]="day" />
+    }
+  </div>
+}

@@ -2,10 +2,11 @@ import { Component } from '@angular/core';
 import { MonthPicker } from './components/month-picker/month-picker';
 import { TemperatureDisplay } from './components/temperature-display/temperature-display';
 import { CityPicker } from './components/city-picker/city-picker';
+import { ForecastGrid } from './components/forecast-grid/forecast-grid';
 
 @Component({
   selector: 'app-root',
-  imports: [MonthPicker, TemperatureDisplay, CityPicker],
+  imports: [MonthPicker, TemperatureDisplay, CityPicker, ForecastGrid],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
