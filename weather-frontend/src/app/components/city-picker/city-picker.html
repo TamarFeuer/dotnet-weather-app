@@ -1,0 +1,8 @@
+<!-- The options come from cities() - a signal fed by the store, filled once the
+     backend's /cities response arrives. Otherwise identical to month-picker. -->
+<select #citySelect (change)="onCityChange(citySelect.value)">
+  <option value="" disabled selected>Choose a city</option>
+  @for (city of cities(); track city) {
+    <option [value]="city">{{ city }}</option>
+  }
+</select>

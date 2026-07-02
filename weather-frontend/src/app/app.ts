@@ -1,10 +1,11 @@
 import { Component } from '@angular/core';
 import { MonthPicker } from './components/month-picker/month-picker';
 import { TemperatureDisplay } from './components/temperature-display/temperature-display';
+import { CityPicker } from './components/city-picker/city-picker';
 
 @Component({
   selector: 'app-root',
-  imports: [MonthPicker, TemperatureDisplay],
+  imports: [MonthPicker, TemperatureDisplay, CityPicker],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
