@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { selectInfo } from '../../store/weather.selectors';
+import { selectInfo } from '../../store/weather/weather.selectors';
 
 @Component({
   selector: 'app-temperature-display',

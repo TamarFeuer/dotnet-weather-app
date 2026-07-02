@@ -51,6 +51,13 @@ builder.Services.AddScoped<IMonthDataSource, SqlMonthDataSource>();        // SQ
 builder.Services.AddScoped<IWeatherRepository, WeatherRepository>();
 builder.Services.AddScoped<IWeatherService, WeatherService>();
 
+// --- Forecast feature (live Open-Meteo API) ---
+// AddHttpClient wires up an HttpClient for OpenMeteoForecastSource AND registers
+// it as the IForecastSource in one line. Swap it for a seeded driver later by
+// changing only this line.
+builder.Services.AddHttpClient<IForecastSource, OpenMeteoForecastSource>();
+builder.Services.AddScoped<IForecastService, ForecastService>();
+
 WebApplication app = builder.Build();
 
 // On startup, make sure the SQLite file, the Temperatures table, and the seed

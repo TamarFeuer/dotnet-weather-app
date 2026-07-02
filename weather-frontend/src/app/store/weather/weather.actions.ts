@@ -1,5 +1,5 @@
 import { createAction, props } from '@ngrx/store';
-import { WeatherInfo } from '../weather.service';
+import { WeatherInfo } from '../../weather.service';
 
 // An ACTION is a plain object describing something that happened. createAction
 // takes a unique type string (convention: '[Source] Event') and props()

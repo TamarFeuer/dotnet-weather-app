@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
 import { map, switchMap, catchError, of } from 'rxjs';
-import { WeatherService } from '../weather.service';
+import { WeatherService } from '../../weather.service';
 import { monthSelected, weatherLoaded, weatherFailed } from './weather.actions';
 
 // An EFFECT listens for actions and does the side-effect work (here: the HTTP

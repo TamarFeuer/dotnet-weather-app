@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { monthSelected } from '../../store/weather.actions';
+import { monthSelected } from '../../store/weather/weather.actions';
 
 @Component({
   selector: 'app-month-picker',

@@ -1,4 +1,4 @@
-import { WeatherInfo } from '../weather.service';
+import { WeatherInfo } from '../../weather.service';
 
 // The store's state is one big object split into named sections ("slices").
 // This interface describes our "weather" slice - the weather state the app
