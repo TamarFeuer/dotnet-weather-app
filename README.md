@@ -1,13 +1,25 @@
 # WeatherAPI
 
-A small ASP.NET Core Web API built to learn **Clean Architecture**. For a chosen
-month it returns the usual temperature range plus a typical (average) value and
-a short description, and can read its data from either a JSON file or a SQLite
-database - swappable with one line.
+A small full-stack project built to learn layered backend architecture (ASP.NET
+Core) and reactive frontend state management (Angular + NgRx). It has two
+features:
+
+- **Typical weather** for a month: a temperature range, a typical (average)
+  value and a short description, read from a JSON file or a SQLite database
+  (swappable with one line).
+- **5-day forecast** for a Dutch city: live data fetched from the free
+  [Open-Meteo](https://open-meteo.com/) API, behind the same swappable-driver
+  pattern as the month feature.
 
 ```
 GET /api/weather/temperature?month=January
 ->  { "minTemp": 1, "maxTemp": 6, "average": 3, "description": "Freezing" }
+
+GET /api/weather/cities
+->  ["Amsterdam", "Rotterdam", "The Hague", ...]
+
+GET /api/weather/forecast?city=Amsterdam
+->  [ { "date": "2026-07-03", "minTemp": 13, "maxTemp": 21, "condition": "Cloudy" }, ... ]
 ```
 
 ## Repository layout
@@ -16,82 +28,111 @@ This repo holds two apps side by side:
 
 - `weather-backend/` - the ASP.NET Core API (this README describes it; all
   backend paths below are relative to this folder)
-- `weather-frontend/` - the Angular app: a month dropdown that shows the weather live
+- `weather-frontend/` - the Angular app: this month's typical weather plus a
+  city forecast grid, updating live with no page refresh
 
 ## Frontend
 
-`weather-frontend/` is an Angular app: a month dropdown that calls the API and
-shows the result live (no page refresh). It's split into two components -
-`MonthPicker` (the dropdown; emits the chosen month) and `TemperatureDisplay`
-(shows the range, average and description) - coordinated by the root `App`.
+`weather-frontend/` is an Angular app. State lives in an **NgRx** store (the
+Redux pattern: actions, reducers, selectors, effects) - the choice the project
+made between the two options it considered, Signals and NgRx.
 
-State is managed with **Angular Signals** - a deliberate choice between the two
-options the project considered, Signals and NgRx.
+The store has two slices, one per feature:
+
+- **`weather`** - this month's typical weather.
+- **`forecast`** - the city list and the selected city's 5-day forecast.
+
+The components each talk to the store on their own; the root `App` is just a
+shell that hosts them:
+
+- **`TypicalWeather`** - on load, dispatches the current month automatically (no
+  dropdown), keeping the month feature in use. Shows the result via
+  `TemperatureDisplay`.
+- **`TemperatureDisplay`** - reads the month's info from the store and shows the
+  range, average and description.
+- **`CityPicker`** - a dropdown whose options come from the backend: on load it
+  dispatches an action to fetch the city list, and on change it dispatches the
+  chosen city.
+- **`ForecastGrid`** - a container: reads the forecast slice and renders one
+  **`DayCard`** per day.
+- **`DayCard`** - presentational: holds no store logic; one day flows in through
+  an input and it just renders it.
 
 ## Backend structure
 
-Inside `weather-backend/`, four folders organized by responsibility, with the
-request flowing Controller → Service → Repository (Models is the shared data
-type):
+Inside `weather-backend/`, four folders organized by responsibility, with each
+request flowing Controller → Service → Repository (Models holds the shared data
+types):
 
-![WeatherAPI project structure - Controller/ (API, HTTP endpoint):
-WeatherEndpoint.cs; Service/ (business logic): WeatherService.cs,
-IWeatherService.cs, WeatherInfo.cs; Repository/ (data access): WeatherRepository.cs,
+![WeatherAPI project structure - Controller/ (API, HTTP endpoints):
+WeatherEndpoint.cs, ForecastEndpoint.cs; Service/ (business logic):
+WeatherService.cs, IWeatherService.cs, WeatherInfo.cs, ForecastService.cs,
+IForecastService.cs; Repository/ (data access): WeatherRepository.cs,
 IWeatherRepository.cs, IMonthDataSource.cs, WeatherDbContext.cs,
-SqlMonthDataSource.cs, JsonMonthDataSource.cs, months.json; Models/
-(data model): Temperature.cs](docs/clean_architecture.png)
+SqlMonthDataSource.cs, JsonMonthDataSource.cs, months.json, IForecastSource.cs,
+OpenMeteoForecastSource.cs, DutchCities.cs; Models/ (data models):
+Temperature.cs, City.cs, ForecastDay.cs](docs/clean_architecture.png)
 
-## How a request flows
+Both features use the same shape: the controller calls a service, the service
+calls something behind an interface (a "port"), and a concrete driver fills that
+port. The month feature's port is `IMonthDataSource` (filled by SQLite or JSON);
+the forecast feature's port is `IForecastSource` (filled by the Open-Meteo
+driver). Swapping a driver is a one-line change in `Program.cs` and nothing else
+in the app knows.
 
-The full path of one request, from the dropdown to the database and back. (The
-storage driver - SQLite or the JSON file - is chosen once at startup in
-`Program.cs`; see "Swapping storage" below.)
+## How a forecast request flows
+
+The full path of one request, from picking a city to the live API and back,
+through the NgRx lifecycle (action → effect → reducer → selector):
 
 ```
-1.  User picks a month in the dropdown
-2.  <select>'s (change) fires
-3.  MonthPicker runs monthSelected.emit("July")
-4.  App's binding (monthSelected)="onMonthSelected($event)"
-       → Angular calls App.onMonthSelected("July")
-5.  onMonthSelected calls this.weather.getWeather("July")   (frontend service)
-6.  getWeather calls http.get<WeatherInfo>(apiUrl, {params:{month:"July"}})
-       → returns an Observable
-7.  onMonthSelected subscribes to that Observable (.subscribe(...)) → the HTTP request actually fires
+1.  User picks a city in the dropdown
+2.  <select>'s (change) fires → CityPicker dispatches citySelected("Amsterdam")
+3.  The reducer sets loading: true on the forecast slice
+4.  The loadForecast$ effect hears citySelected and calls the frontend
+       ForecastService.getForecast("Amsterdam") → an Observable
     ----------------- crosses to the backend -----------------
-8.  Kestrel receives GET /api/weather/temperature?month=July
-       → routing → WeatherEndpoint
-9.  Controller calls _service.GetWeather("July")            (backend C# service)
-10. Service calls _repository.GetByMonth("July")
-11. Repository → IMonthDataSource → SqlMonthDataSource → EF Core
-       → SELECT FROM Temperatures → weather.db
-12. Repository returns the July Temperature row
-13. Service computes average + description → returns a WeatherInfo
-14. Controller returns Ok(info) → JSON { minTemp, maxTemp, average, description }
+5.  Kestrel receives GET /api/weather/forecast?city=Amsterdam
+       → routing → ForecastEndpoint
+6.  Controller calls _service.GetForecastAsync("Amsterdam")
+7.  ForecastService validates the city via DutchCities.Find (404 if unknown),
+       then calls _source.GetForecastAsync(city)
+8.  IForecastSource → OpenMeteoForecastSource builds the Open-Meteo URL from the
+       city's coordinates and awaits the live HTTP call
+9.  The driver adapts Open-Meteo's JSON (parallel arrays + WMO weather codes)
+       into a list of our own ForecastDay objects
+10. Controller returns Ok(days) → JSON array of { date, minTemp, maxTemp, condition }
     ----------------- response crosses back -----------------
-15. The frontend Observable emits that response object
-16. The subscribe callback runs: this.currentWeather.set(response)
-       → App's currentWeather signal now holds the WeatherInfo
-17. currentWeather changed → Angular re-renders → [info]="currentWeather()"
-       passes the value into TemperatureDisplay's input
-18. TemperatureDisplay's @if shows the range, average, description  (no F5)
+11. The effect's Observable emits the days; the effect dispatches forecastLoaded
+12. The reducer writes the days into the forecast slice and sets loading: false
+13. ForecastGrid's selectors (fed as signals) change → Angular re-renders
+14. The grid renders one DayCard per day (no page refresh)
 ```
+
+The month feature follows the same lifecycle: `TypicalWeather` dispatches
+`monthSelected` on load, the effect calls the backend, and `TemperatureDisplay`
+reads the result from the store.
 
 ## Swapping storage (JSON ↔ SQLite)
 
-Both drivers sit behind the same `IMonthDataSource` interface. Pick one in
-`Program.cs` - comment one line, uncomment the other:
+The month feature's two drivers sit behind the same `IMonthDataSource`
+interface. Pick one in `Program.cs` - comment one line, uncomment the other:
 
 ```csharp
 // builder.Services.AddScoped<IMonthDataSource, JsonMonthDataSource>();  // file
 builder.Services.AddScoped<IMonthDataSource, SqlMonthDataSource>();      // SQLite (default)
 ```
 
-Nothing else in the app changes - the controller, service, and repository
-never know which storage is behind the interface.
+Nothing else in the app changes - the controller, service, and repository never
+know which storage is behind the interface.
 
 - **JSON driver** reads `Repository/months.json`.
 - **SQLite driver** uses EF Core; the database file `weather.db` is created and
   seeded automatically on startup by `EnsureCreated()`.
+
+The forecast feature uses the same idea: `OpenMeteoForecastSource` sits behind
+`IForecastSource`, wired in `Program.cs` with `AddHttpClient`. Swap it for a
+seeded driver by changing that one line.
 
 ## Running it
 
@@ -102,9 +143,12 @@ cd weather-backend
 dotnet run
 ```
 
-Then test it in your browser:
+Then test it in your browser (the forecast needs an internet connection, since
+it calls the live Open-Meteo API):
 
 - `http://localhost:5151/api/weather/temperature?month=July`
+- `http://localhost:5151/api/weather/cities`
+- `http://localhost:5151/api/weather/forecast?city=Amsterdam`
 
 Frontend, from `weather-frontend/`:
 
@@ -129,4 +173,10 @@ echo "=== SELECT * FROM Temperatures ==="; sqlite3 -header -column weather.db "S
 
 - `weather.db` is generated at runtime (and git-ignored) - it rebuilds itself
   from the seed data in `WeatherDbContext`.
-- Targets .NET 10. Storage via `Microsoft.EntityFrameworkCore.Sqlite`.
+- The forecast feature calls Open-Meteo (free, no API key). The list of
+  supported cities and their coordinates lives in `Repository/DutchCities.cs`.
+- Backend targets .NET 10, storage via `Microsoft.EntityFrameworkCore.Sqlite`.
+  Frontend uses Angular with `@ngrx/store`, `@ngrx/effects` and
+  `@ngrx/store-devtools`.
+```
+
