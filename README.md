@@ -194,6 +194,14 @@ cd weather-backend
 echo "=== SELECT * FROM Temperatures ==="; sqlite3 -header -column weather.db "SELECT * FROM Temperatures;"
 ```
 
+The forecast feature has no local database (its data is live), but you can see
+the raw data the frontend receives by opening the endpoint directly while the
+backend is running:
+
+```
+http://localhost:5151/api/weather/forecast?city=Amsterdam
+```
+
 ## Notes
 
 - `weather.db` is generated at runtime (and git-ignored) - it rebuilds itself
