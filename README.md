@@ -178,5 +178,3 @@ echo "=== SELECT * FROM Temperatures ==="; sqlite3 -header -column weather.db "S
 - Backend targets .NET 10, storage via `Microsoft.EntityFrameworkCore.Sqlite`.
   Frontend uses Angular with `@ngrx/store`, `@ngrx/effects` and
   `@ngrx/store-devtools`.
-```
-
