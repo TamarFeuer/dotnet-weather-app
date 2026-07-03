@@ -22,6 +22,31 @@ GET /api/weather/forecast?city=Amsterdam
 ->  [ { "date": "2026-07-03", "minTemp": 13, "maxTemp": 21, "condition": "Cloudy" }, ... ]
 ```
 
+## The ideas behind it
+
+Two patterns shape this project.
+
+**Clean Architecture** - dependencies point inward: outer concerns (web,
+database) depend on inner ones (business rules), never the reverse. The backend
+uses a simplified, three-layer take on it (Controller → Service → Repository),
+but the guiding idea is the classic model:
+
+![Clean Architecture: concentric rings - Entities, Use Cases, Interface
+Adapters, Frameworks & Drivers - with dependencies pointing
+inward](docs/clean_architecture.png)
+
+*Source: Robert C. Martin, "The Clean Architecture"
+(blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)*
+
+**One-directional data flow (NgRx)** - the frontend never mutates shared state
+directly. A component dispatches an action, an effect does any async work, a
+reducer produces the new state, and selectors feed it back to the components:
+one loop, one direction.
+
+![NgRx lifecycle: component dispatches an action, the reducer updates the store,
+selectors feed the store back to the component; effects handle async work by
+calling a service and dispatching a new action](docs/ngrx_lifecycle.png)
+
 ## Repository layout
 
 This repo holds two apps side by side:
@@ -71,7 +96,7 @@ IForecastService.cs; Repository/ (data access): WeatherRepository.cs,
 IWeatherRepository.cs, IMonthDataSource.cs, WeatherDbContext.cs,
 SqlMonthDataSource.cs, JsonMonthDataSource.cs, months.json, IForecastSource.cs,
 OpenMeteoForecastSource.cs, DutchCities.cs; Models/ (data models):
-Temperature.cs, City.cs, ForecastDay.cs](docs/clean_architecture.png)
+Temperature.cs, City.cs, ForecastDay.cs](docs/backend_structure.png)
 
 Both features use the same shape: the controller calls a service, the service
 calls something behind an interface (a "port"), and a concrete driver fills that
