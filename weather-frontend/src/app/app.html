@@ -1,10 +1,9 @@
 <main class="page">
 	<h1>Weather in the Netherlands</h1>
-	<p>Pick a month to see its typical weather.</p>
+	<p>This month's typical weather, and a 5-day forecast for a city you pick.</p>
 
-	<!-- Both components talk to the store directly now - no input/output wiring. -->
-	<app-month-picker />
-	<app-temperature-display />
+	<!-- Auto-shows the current month's typical weather (no dropdown). -->
+	<app-typical-weather />
 
 	<!-- The forecast feature: pick a city, see its 5-day forecast. -->
 	<app-city-picker />

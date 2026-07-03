@@ -6,7 +6,7 @@ import { WeatherInfo } from '../../weather.service';
 // declares the payload it carries. Dispatching monthSelected({ month: 'July' })
 // produces the object { type: '[Weather] Month Selected', month: 'July' }.
 
-// The user picked a month (will be dispatched by MonthPicker).
+// A month was chosen (dispatched by TypicalWeather for the current month).
 export const monthSelected = createAction(
 	'[Weather] Month Selected',
 	props<{ month: string }>()
