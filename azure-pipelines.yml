@@ -1,0 +1,36 @@
+# ============================================================================
+# Azure DevOps Pipeline - step 1: build the backend
+# ============================================================================
+# Intentionally minimal: it only builds the .NET backend, so we first confirm
+# that the GitHub connection works and the build is green. Frontend, tests and
+# security scanning come in the next steps.
+
+# WHEN: on every push to main.
+trigger:
+  branches:
+    include:
+      - main
+
+# WHERE: a fresh, Microsoft-hosted Ubuntu machine (clean and reproducible -
+# nobody's local mess is involved).
+pool:
+  vmImage: 'ubuntu-latest'
+
+# THE STEPS:
+steps:
+  # 1. Install the .NET 10 SDK on the build machine.
+  - task: UseDotNet@2
+    displayName: 'Install .NET 10 SDK'
+    inputs:
+      packageType: 'sdk'
+      version: '10.0.x'
+
+  # 2. Restore the NuGet dependencies (e.g. EntityFrameworkCore.Sqlite).
+  - script: dotnet restore
+    displayName: 'Restore dependencies'
+    workingDirectory: 'weather-backend'
+
+  # 3. Build the backend in Release. If this fails, the whole pipeline fails.
+  - script: dotnet build --configuration Release --no-restore
+    displayName: 'Build backend'
+    workingDirectory: 'weather-backend'
