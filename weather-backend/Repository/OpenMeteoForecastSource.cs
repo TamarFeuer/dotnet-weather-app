@@ -12,6 +12,7 @@
 // async method instead RETURNS a Task ("the result will arrive later") and
 // frees the thread; `await` says "pause here until the result arrives, without
 // blocking". It's the backend twin of the frontend's Observable + subscribe.
+using System.Globalization;
 using System.Text.Json.Serialization;
 using WeatherAPI.Models;
 
@@ -31,10 +32,19 @@ namespace WeatherAPI.Repository
 
 		public async Task<IReadOnlyList<ForecastDay>> GetForecastAsync(City city)
 		{
+			// The coordinates MUST reach Open-Meteo with a decimal POINT. Putting a
+			// double straight into an interpolated string formats it with the
+			// machine's current culture, so on a Dutch or German locale 52.37 turns
+			// into "52,37" and Open-Meteo rejects the URL. The app would then work on
+			// one machine and break on another purely because of a regional setting.
+			// InvariantCulture pins the format regardless of where this runs.
+			string latitude = city.Latitude.ToString(CultureInfo.InvariantCulture);
+			string longitude = city.Longitude.ToString(CultureInfo.InvariantCulture);
+
 			// Ask Open-Meteo for 5 days of min/max temperature + weather code.
 			string url =
 				$"https://api.open-meteo.com/v1/forecast" +
-				$"?latitude={city.Latitude}&longitude={city.Longitude}" +
+				$"?latitude={latitude}&longitude={longitude}" +
 				$"&daily=temperature_2m_min,temperature_2m_max,weather_code" +
 				$"&timezone=auto&forecast_days=5";
 
@@ -77,7 +87,12 @@ namespace WeatherAPI.Repository
 			>= 71 and <= 77 => "Snow",
 			>= 80 and <= 82 => "Showers",
 			85 or 86    => "Snow showers",
-			>= 95       => "Thunderstorm",
+			// Bounded on purpose. An open-ended ">= 95" would swallow every value
+			// above 95, so a nonsense code (a typo, a corrupt response, a code WMO
+			// adds later) would be confidently labelled a thunderstorm and the
+			// "Unknown" fallback below could never be reached. Real WMO codes stop
+			// at 99, so anything beyond that is not weather, it is a bug.
+			>= 95 and <= 99 => "Thunderstorm",
 			_           => "Unknown",
 		};
 
