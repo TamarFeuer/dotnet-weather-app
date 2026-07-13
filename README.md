@@ -12,7 +12,7 @@ features:
   pattern as the month feature.
 
 ```
-GET /api/weather/temperature?month=January
+GET /api/weather/typical?month=January
 ->  { "minTemp": 1, "maxTemp": 6, "average": 3, "description": "Freezing" }
 
 GET /api/weather/cities
@@ -22,14 +22,30 @@ GET /api/weather/forecast?city=Amsterdam
 ->  [ { "date": "2026-07-03", "minTemp": 13, "maxTemp": 21, "condition": "Cloudy" }, ... ]
 ```
 
+## Contents
+
+- [The ideas behind it](#the-ideas-behind-it)
+- [Repository layout](#repository-layout)
+- [Frontend](#frontend)
+- [Backend structure](#backend-structure)
+- [How a forecast request flows](#how-a-forecast-request-flows)
+- [Swapping storage (JSON or SQLite)](#swapping-storage-json-or-sqlite)
+- [Running it](#running-it)
+- [Continuous integration](#continuous-integration)
+- [Inspecting the database](#inspecting-the-database)
+- [Notes](#notes)
+
 ## The ideas behind it
 
 Two patterns shape this project.
 
 **Clean Architecture** - dependencies point inward: outer concerns (web,
 database) depend on inner ones (business rules), never the reverse. The backend
-uses a simplified, three-layer take on it (Controller → Service → Repository),
-but the guiding idea is the classic model:
+uses a simplified take on it: a request flows through three layers (Controller →
+Service → Repository), which pass around plain data models (Temperature, City,
+ForecastDay, TypicalInfo). Those models are not a fourth step but the data
+itself - the innermost ring, the "Entities" at the center of the classic model
+below:
 
 ![Clean Architecture: concentric rings - Entities, Use Cases, Interface
 Adapters, Frameworks & Drivers - with dependencies pointing
@@ -90,10 +106,10 @@ request flowing Controller → Service → Repository (Models holds the shared d
 types):
 
 ![WeatherAPI project structure - Controller/ (API, HTTP endpoints):
-WeatherEndpoint.cs, ForecastEndpoint.cs; Service/ (business logic):
-WeatherService.cs, IWeatherService.cs, WeatherInfo.cs, ForecastService.cs,
-IForecastService.cs; Repository/ (data access): WeatherRepository.cs,
-IWeatherRepository.cs, IMonthDataSource.cs, WeatherDbContext.cs,
+TypicalEndpoint.cs, ForecastEndpoint.cs; Service/ (business logic):
+TypicalService.cs, ITypicalService.cs, TypicalInfo.cs, ForecastService.cs,
+IForecastService.cs; Repository/ (data access): TypicalRepository.cs,
+ITypicalRepository.cs, IMonthDataSource.cs, WeatherDbContext.cs,
 SqlMonthDataSource.cs, JsonMonthDataSource.cs, months.json, IForecastSource.cs,
 OpenMeteoForecastSource.cs, DutchCities.cs; Models/ (data models):
 Temperature.cs, City.cs, ForecastDay.cs](docs/backend_structure.png)
@@ -138,7 +154,7 @@ The month feature follows the same lifecycle: `TypicalWeather` dispatches
 `monthSelected` on load, the effect calls the backend, and `TemperatureDisplay`
 reads the result from the store.
 
-## Swapping storage (JSON ↔ SQLite)
+## Swapping storage (JSON or SQLite)
 
 The month feature's two drivers sit behind the same `IMonthDataSource`
 interface. Pick one in `Program.cs` - comment one line, uncomment the other:
@@ -171,7 +187,7 @@ dotnet run
 Then test it in your browser (the forecast needs an internet connection, since
 it calls the live Open-Meteo API):
 
-- `http://localhost:5151/api/weather/temperature?month=July`
+- `http://localhost:5151/api/weather/typical?month=July`
 - `http://localhost:5151/api/weather/cities`
 - `http://localhost:5151/api/weather/forecast?city=Amsterdam`
 
@@ -183,6 +199,18 @@ npm start            # Angular dev server on http://localhost:4200
 ```
 
 Press `Ctrl+C` to stop either one.
+
+## Continuous integration
+
+Every push to `main` triggers a pipeline in Azure DevOps, defined as code in
+[`azure-pipelines.yml`](azure-pipelines.yml). It spins up a fresh
+Microsoft-hosted Ubuntu agent, checks out the repository, installs the .NET SDK
+and builds the backend. If the build fails the run goes red, so broken code is
+caught automatically instead of by whoever pulls it next.
+
+This is the first layer of a DevSecOps setup that is being built out step by
+step. Still to come: the frontend build, automated tests, quality gates (a pull
+request may only merge if the pipeline is green) and security scanning.
 
 ## Inspecting the database
 
