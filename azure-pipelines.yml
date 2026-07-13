@@ -146,6 +146,11 @@ jobs:
       #
       # --coverage records which lines the tests actually executed, in the same
       # Cobertura format the backend produces, so both land in one report.
+      #
+      # --coverage-include is what makes that number honest. By default the tool
+      # only reports files a test happened to load, so a file nobody tests at all
+      # stays INVISIBLE instead of counting as zero, and the percentage flatters
+      # you. Naming every source file forces the untested ones to show up.
       - script: >
           npm test --
           --watch=false
@@ -154,6 +159,8 @@ jobs:
           --output-file=junit-results.xml
           --coverage
           --coverage-reporters=cobertura
+          --coverage-include='src/app/**/*.ts'
+          --coverage-include='src/app/**/*.html'
         displayName: 'Test frontend'
         workingDirectory: 'weather-frontend'
 
