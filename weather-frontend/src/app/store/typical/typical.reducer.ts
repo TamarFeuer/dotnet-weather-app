@@ -1,15 +1,14 @@
 import { createReducer, on } from '@ngrx/store';
-import { initialWeatherState } from './weather.state';
-import { monthSelected, weatherLoaded, weatherFailed } from './weather.actions';
+import { initialTypicalState } from './typical.state';
+import { monthSelected, typicalLoaded, typicalFailed } from './typical.actions';
 
 // The reducer is a PURE function: (current state, action) => new state. It never
 // changes the old state - it returns a NEW object (we spread ...state to copy
-// the old fields, then override the ones that change). createReducer wires each
-// action to how it updates the state.
-export const weatherReducer = createReducer(
-	initialWeatherState,
+// the old fields, then override the ones that change).
+export const typicalReducer = createReducer(
+	initialTypicalState,
 
-	// User picked a month: remember it, turn loading on, clear any old error.
+	// A month is showing: remember it, turn loading on, clear any old error.
 	on(monthSelected, (state, { month }) => ({
 		...state,
 		selectedMonth: month,
@@ -18,14 +17,14 @@ export const weatherReducer = createReducer(
 	})),
 
 	// Data arrived: store it and turn loading off.
-	on(weatherLoaded, (state, { info }) => ({
+	on(typicalLoaded, (state, { info }) => ({
 		...state,
 		info,
 		loading: false,
 	})),
 
 	// Request failed: clear the data, turn loading off, keep the error message.
-	on(weatherFailed, (state, { error }) => ({
+	on(typicalFailed, (state, { error }) => ({
 		...state,
 		info: null,
 		loading: false,

@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { selectInfo } from '../../store/weather/weather.selectors';
+import { selectTypicalInfo } from '../../store/typical/typical.selectors';
 
 @Component({
   selector: 'app-temperature-display',
@@ -12,5 +12,5 @@ export class TemperatureDisplay {
   // selector into a signal, so the template still reads it as info() and stays
   // reactive - no @Input needed anymore.
   private store = inject(Store);
-  readonly info = this.store.selectSignal(selectInfo);
+  readonly info = this.store.selectSignal(selectTypicalInfo);
 }

@@ -1,7 +1,7 @@
 // ============================================================================
 // REPOSITORY - data access
 // ============================================================================
-// WeatherRepository implements IWeatherRepository. Its job is to fetch the data
+// TypicalRepository implements ITypicalRepository. Its job is to fetch the data
 // the service asks for and shape it into a Temperature.
 //
 // It doesn't touch storage directly: it goes through the IMonthDataSource
@@ -12,14 +12,14 @@ using WeatherAPI.Models;
 
 namespace WeatherAPI.Repository
 {
-	public class WeatherRepository : IWeatherRepository
+	public class TypicalRepository : ITypicalRepository
 	{
-		// WeatherRepository depends on the IMonthDataSource interface; the
+		// TypicalRepository depends on the IMonthDataSource interface; the
 		// concrete driver (JsonMonthDataSource / SqlMonthDataSource) is injected
 		// via the constructor, wired up in Program.cs.
 		private readonly IMonthDataSource _dataSource;
 
-		public WeatherRepository(IMonthDataSource dataSource)
+		public TypicalRepository(IMonthDataSource dataSource)
 		{
 			_dataSource = dataSource;
 		}

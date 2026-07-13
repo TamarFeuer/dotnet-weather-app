@@ -5,7 +5,7 @@
 // depend only on interfaces; here is where we decide which concrete class
 // implements each one (which service, which repository, which storage driver).
 using Microsoft.EntityFrameworkCore;  // UseSqlite, EnsureCreated
-using WeatherAPI.Service;             // IWeatherService, WeatherService
+using WeatherAPI.Service;             // ITypicalService, TypicalService
 using WeatherAPI.Repository;          // repository, data-source port, drivers, DbContext
 
 
@@ -14,7 +14,7 @@ using WeatherAPI.Repository;          // repository, data-source port, drivers, 
 // response headers).
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-// Register the MVC controllers (this is what makes WeatherEndpoint reachable).
+// Register the MVC controllers (this is what makes the endpoints reachable).
 builder.Services.AddControllers();
 
 // CORS: let the Angular dev server (a different origin) call this API. Without
@@ -29,10 +29,10 @@ builder.Services.AddCors(options =>
 });
 
 // --- The actual wiring of the architecture ---------------------------------
-// "When something asks for IWeatherRepository, give it a WeatherRepository."
-// "When something asks for IWeatherService, give it a WeatherService."
+// "When something asks for ITypicalRepository, give it a TypicalRepository."
+// "When something asks for ITypicalService, give it a TypicalService."
 // ASP.NET's container then builds the whole chain for us automatically:
-//   WeatherEndpoint <- IWeatherService <- IWeatherRepository
+//   TypicalEndpoint <- ITypicalService <- ITypicalRepository
 //
 // AddScoped = create one instance per HTTP request (the standard choice for
 // web APIs). The other classes never see these lines; they only ever know
@@ -43,13 +43,13 @@ builder.Services.AddDbContext<WeatherDbContext>(options =>
     options.UseSqlite("Data Source=weather.db"));
 
 // --- THE ONE-LINE DRIVER SWAP ---
-// WeatherRepository depends only on the IMonthDataSource interface. We choose
+// TypicalRepository depends only on the IMonthDataSource interface. We choose
 // which driver fills it here. Comment one line, uncomment the other - nothing
 // else in the app changes.
 // builder.Services.AddScoped<IMonthDataSource, JsonMonthDataSource>();  // file
 builder.Services.AddScoped<IMonthDataSource, SqlMonthDataSource>();        // SQLite
-builder.Services.AddScoped<IWeatherRepository, WeatherRepository>();
-builder.Services.AddScoped<IWeatherService, WeatherService>();
+builder.Services.AddScoped<ITypicalRepository, TypicalRepository>();
+builder.Services.AddScoped<ITypicalService, TypicalService>();
 
 // --- Forecast feature (live Open-Meteo API) ---
 // AddHttpClient wires up an HttpClient for OpenMeteoForecastSource AND registers

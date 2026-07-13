@@ -13,7 +13,7 @@ export interface ForecastDay {
 
 // A second service, the frontend twin of the backend's ForecastService. Its
 // only job is to call the two new backend endpoints. Kept separate from
-// WeatherService (the month feature) so each service has one job - the same
+// TypicalService (the month feature) so each service has one job - the same
 // one-class-one-job split we made on the backend.
 @Injectable({ providedIn: 'root' })
 export class ForecastService {

@@ -1,6 +1,6 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { monthSelected } from '../../store/weather/weather.actions';
+import { monthSelected } from '../../store/typical/typical.actions';
 import { TemperatureDisplay } from '../temperature-display/temperature-display';
 
 @Component({

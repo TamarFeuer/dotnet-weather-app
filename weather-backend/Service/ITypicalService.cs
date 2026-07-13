@@ -1,13 +1,13 @@
 // ============================================================================
 // SERVICE - contract
 // ============================================================================
-// IWeatherService is the contract the controller calls. WeatherEndpoint depends
-// on this interface and calls GetWeather(month); it never touches the concrete
-// WeatherService.
+// ITypicalService is the contract the controller calls. TypicalEndpoint depends
+// on this interface and calls GetTypical(month); it never touches the concrete
+// TypicalService.
 namespace WeatherAPI.Service
 {
-	public interface IWeatherService
+	public interface ITypicalService
 	{
-		WeatherInfo? GetWeather(string month);
+		TypicalInfo? GetTypical(string month);
 	}
 }

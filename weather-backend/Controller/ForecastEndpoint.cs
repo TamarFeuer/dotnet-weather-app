@@ -1,7 +1,7 @@
 // ============================================================================
 // CONTROLLER - API (HTTP endpoints)
 // ============================================================================
-// The forecast endpoints. Separate from WeatherEndpoint (the month feature) so
+// The forecast endpoints. Separate from TypicalEndpoint (the month feature) so
 // each controller has one job. Both live under /api/weather.
 //
 //   GET /api/weather/cities            -> ["Amsterdam", "Rotterdam", ...]

@@ -5,7 +5,7 @@
 // database through EF Core's DbContext.
 //
 // It is the sibling of JsonMonthDataSource: same contract, different storage.
-// WeatherRepository can't tell them apart - switching between them is one line
+// TypicalRepository can't tell them apart - switching between them is one line
 // in Program.cs.
 using WeatherAPI.Models;
 
