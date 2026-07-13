@@ -14,11 +14,23 @@
 #
 # Tests, quality gates and security scanning come in the next steps.
 
-# WHEN: on every push to main.
+# WHEN: on every push to main, EXCEPT when only documentation changed.
+#
+# A path filter keeps the pipeline from running for changes that cannot possibly
+# break the build. If every file in the push matches one of these excludes, no
+# run is queued. Editing the README should not cost a build.
+#
+# Note: this only affects automatic (CI) triggers. You can always start a run by
+# hand from the Azure DevOps UI.
 trigger:
   branches:
     include:
       - main
+  paths:
+    exclude:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
 
 # WHERE: a fresh, Microsoft-hosted Ubuntu machine (clean and reproducible -
 # nobody's local mess is involved). Each job gets its own machine.
@@ -80,4 +92,15 @@ jobs:
       # this job fails.
       - script: npm run build
         displayName: 'Build frontend'
+        workingDirectory: 'weather-frontend'
+
+      # Run the unit tests.
+      #
+      # --watch=false is essential here. By default ng test runs the tests and
+      # then STAYS OPEN, waiting for a file to change so it can re-run. That is
+      # useful while developing, but in a pipeline the step would never finish
+      # and the job would hang until it times out. The extra "--" tells npm to
+      # pass the flag through to ng rather than eat it itself.
+      - script: npm test -- --watch=false
+        displayName: 'Test frontend'
         workingDirectory: 'weather-frontend'
