@@ -42,7 +42,7 @@ jobs:
   # JOB 1 - BACKEND (.NET / C#)
   # ==========================================================================
   - job: Backend
-    displayName: 'Build the .NET backend'
+    displayName: 'Backend: build and test'
     steps:
       # Install the .NET 10 SDK on the build machine.
       - task: UseDotNet@2
@@ -61,12 +61,16 @@ jobs:
         displayName: 'Build backend'
         workingDirectory: 'weather-backend'
 
-      # Run the xUnit tests. The --logger flag writes the results to a .trx file
-      # (Microsoft's test report format) instead of only printing them, so the
-      # next step can hand them to Azure.
+      # Run the xUnit tests.
+      #   --logger  writes the results to a .trx file (Microsoft's test report
+      #             format) instead of only printing them, so the next step can
+      #             hand them to Azure.
+      #   --collect gathers code coverage: which lines of the app were actually
+      #             executed by the tests. It lands as a Cobertura XML file.
       - script: >
           dotnet test --configuration Release
           --logger "trx;LogFileName=backend-tests.trx"
+          --collect:"XPlat Code Coverage"
           --results-directory "$(Agent.TempDirectory)/test-results"
         displayName: 'Test backend'
         workingDirectory: 'weather-backend-tests'
@@ -87,11 +91,19 @@ jobs:
           searchFolder: '$(Agent.TempDirectory)/test-results'
           testRunTitle: 'Backend (xUnit)'
 
+      # Publish the coverage report, which fills the "Code Coverage" tab.
+      # dotnet test drops it in a GUID-named subfolder, hence the ** wildcard.
+      - task: PublishCodeCoverageResults@2
+        displayName: 'Publish backend code coverage'
+        condition: succeededOrFailed()
+        inputs:
+          summaryFileLocation: '$(Agent.TempDirectory)/test-results/**/coverage.cobertura.xml'
+
   # ==========================================================================
   # JOB 2 - FRONTEND (Angular / TypeScript)
   # ==========================================================================
   - job: Frontend
-    displayName: 'Build the Angular frontend'
+    displayName: 'Frontend: build and test'
     steps:
       # Install Node.js. This is the frontend twin of UseDotNet: the machine
       # does not ship with the version we want, so the pipeline installs it.
@@ -131,12 +143,17 @@ jobs:
       # The reporters do two things at once: "junit" writes a machine-readable
       # report for Azure (--output-file applies to the FIRST reporter, hence the
       # order), and "default" keeps the human-readable output in the log.
+      #
+      # --coverage records which lines the tests actually executed, in the same
+      # Cobertura format the backend produces, so both land in one report.
       - script: >
           npm test --
           --watch=false
           --reporters=junit
           --reporters=default
           --output-file=junit-results.xml
+          --coverage
+          --coverage-reporters=cobertura
         displayName: 'Test frontend'
         workingDirectory: 'weather-frontend'
 
@@ -150,3 +167,10 @@ jobs:
           testResultsFormat: 'JUnit'
           testResultsFiles: 'weather-frontend/junit-results.xml'
           testRunTitle: 'Frontend (Vitest)'
+
+      # Publish the coverage report into the same "Code Coverage" tab.
+      - task: PublishCodeCoverageResults@2
+        displayName: 'Publish frontend code coverage'
+        condition: succeededOrFailed()
+        inputs:
+          summaryFileLocation: 'weather-frontend/coverage/**/cobertura-coverage.xml'
