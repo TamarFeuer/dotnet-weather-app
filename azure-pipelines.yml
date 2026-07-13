@@ -1,9 +1,18 @@
 # ============================================================================
-# Azure DevOps Pipeline - step 1: build the backend
+# Azure DevOps Pipeline - step 2: build the backend and the frontend
 # ============================================================================
-# Intentionally minimal: it only builds the .NET backend, so we first confirm
-# that the GitHub connection works and the build is green. Frontend, tests and
-# security scanning come in the next steps.
+# The pipeline is now split into two JOBS, one per half of the project. A job is
+# an independent unit of work that runs on its own fresh machine. Splitting them
+# means:
+#
+#   - each half fails on its own, so a broken frontend cannot hide a broken
+#     backend, and the run shows exactly which half is at fault,
+#   - each job installs only the tools it needs (.NET for one, Node for the
+#     other),
+#   - they can run in parallel once more than one parallel job is available.
+#     On the free tier only one job runs at a time, so they simply queue.
+#
+# Tests, quality gates and security scanning come in the next steps.
 
 # WHEN: on every push to main.
 trigger:
@@ -12,25 +21,56 @@ trigger:
       - main
 
 # WHERE: a fresh, Microsoft-hosted Ubuntu machine (clean and reproducible -
-# nobody's local mess is involved).
+# nobody's local mess is involved). Each job gets its own machine.
 pool:
   vmImage: 'ubuntu-latest'
 
-# THE STEPS:
-steps:
-  # 1. Install the .NET 10 SDK on the build machine.
-  - task: UseDotNet@2
-    displayName: 'Install .NET 10 SDK'
-    inputs:
-      packageType: 'sdk'
-      version: '10.0.x'
+jobs:
+  # ==========================================================================
+  # JOB 1 - BACKEND (.NET / C#)
+  # ==========================================================================
+  - job: Backend
+    displayName: 'Build the .NET backend'
+    steps:
+      # Install the .NET 10 SDK on the build machine.
+      - task: UseDotNet@2
+        displayName: 'Install .NET 10 SDK'
+        inputs:
+          packageType: 'sdk'
+          version: '10.0.x'
 
-  # 2. Restore the NuGet dependencies (e.g. EntityFrameworkCore.Sqlite).
-  - script: dotnet restore
-    displayName: 'Restore dependencies'
-    workingDirectory: 'weather-backend'
+      # Restore the NuGet dependencies (e.g. EntityFrameworkCore.Sqlite).
+      - script: dotnet restore
+        displayName: 'Restore dependencies'
+        workingDirectory: 'weather-backend'
 
-  # 3. Build the backend in Release. If this fails, the whole pipeline fails.
-  - script: dotnet build --configuration Release --no-restore
-    displayName: 'Build backend'
-    workingDirectory: 'weather-backend'
+      # Build in Release. If this fails, this job fails.
+      - script: dotnet build --configuration Release --no-restore
+        displayName: 'Build backend'
+        workingDirectory: 'weather-backend'
+
+  # ==========================================================================
+  # JOB 2 - FRONTEND (Angular / TypeScript)
+  # ==========================================================================
+  - job: Frontend
+    displayName: 'Build the Angular frontend'
+    steps:
+      # Install Node.js. This is the frontend twin of UseDotNet: the machine
+      # does not ship with the version we want, so the pipeline installs it.
+      - task: NodeTool@0
+        displayName: 'Install Node.js'
+        inputs:
+          versionSpec: '22.x'
+
+      # npm ci, not npm install. It installs exactly what package-lock.json
+      # pins and fails if package.json and the lock file disagree. That makes
+      # the build reproducible instead of "whatever npm resolved today".
+      - script: npm ci
+        displayName: 'Install dependencies'
+        workingDirectory: 'weather-frontend'
+
+      # Build the production bundle. If Angular or TypeScript does not compile,
+      # this job fails.
+      - script: npm run build
+        displayName: 'Build frontend'
+        workingDirectory: 'weather-frontend'
