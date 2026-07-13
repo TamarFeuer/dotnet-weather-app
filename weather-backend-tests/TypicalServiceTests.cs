@@ -5,7 +5,7 @@ using WeatherAPI.Service;
 namespace WeatherAPI.Tests;
 
 // A fake repository. TypicalService only ever sees the ITypicalRepository
-// interface, so we can hand it this stub instead of the real one. No SQLite, no
+// interface, so we can hand it this stub instead of the real one. No database, no
 // EF Core, no file on disk: the test stays fast, offline and deterministic.
 //
 // This is the payoff of the port/driver design. The service is testable BECAUSE

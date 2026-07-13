@@ -5,9 +5,11 @@
 // the service asks for and shape it into a Temperature.
 //
 // It doesn't touch storage directly: it goes through the IMonthDataSource
-// contract, whose driver (SqlMonthDataSource for SQLite, JsonMonthDataSource
+// contract, whose driver (SqlMonthDataSource for the database, JsonMonthDataSource
 // for the JSON file) is chosen in Program.cs. Swapping drivers is one line
 // there, and this class never changes because it only ever sees the interface.
+// It did not change when the database itself went from SQLite to PostgreSQL
+// either, which is the same lesson one layer deeper.
 using WeatherAPI.Models;
 
 namespace WeatherAPI.Repository

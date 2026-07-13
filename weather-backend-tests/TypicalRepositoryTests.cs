@@ -4,7 +4,7 @@ using WeatherAPI.Repository;
 namespace WeatherAPI.Tests;
 
 // A fake storage driver. TypicalRepository talks to the IMonthDataSource port,
-// never to SQLite or a JSON file directly, so we can hand it a plain in-memory
+// never to PostgreSQL or a JSON file directly, so we can hand it a plain in-memory
 // list. No database, no file, no EF Core.
 public class FakeMonthDataSource(IReadOnlyList<Temperature> rows) : IMonthDataSource
 {

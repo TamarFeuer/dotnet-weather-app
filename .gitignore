@@ -490,3 +490,6 @@ weather.db
 junit-results.xml
 *.trx
 coverage/
+
+# Local configuration with real values (like .env). The .example file IS committed.
+appsettings.Development.json

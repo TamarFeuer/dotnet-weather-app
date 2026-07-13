@@ -51,7 +51,7 @@ jobs:
           packageType: 'sdk'
           version: '10.0.x'
 
-      # Restore the NuGet dependencies (e.g. EntityFrameworkCore.Sqlite).
+      # Restore the NuGet dependencies (e.g. Npgsql.EntityFrameworkCore.PostgreSQL).
       - script: dotnet restore
         displayName: 'Restore dependencies'
         workingDirectory: 'weather-backend'

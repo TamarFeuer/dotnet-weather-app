@@ -5,7 +5,7 @@ Core) and reactive frontend state management (Angular + NgRx). It has two
 features:
 
 - **Typical weather** for a month: a temperature range, a typical (average)
-  value and a short description, read from a JSON file or a SQLite database
+  value and a short description, read from a JSON file or a PostgreSQL database
   (swappable with one line).
 - **5-day forecast** for a Dutch city: live data fetched from the free
   [Open-Meteo](https://open-meteo.com/) API, behind the same swappable-driver
@@ -29,7 +29,7 @@ GET /api/weather/forecast?city=Amsterdam
 - [Frontend](#frontend)
 - [Backend structure](#backend-structure)
 - [How a forecast request flows](#how-a-forecast-request-flows)
-- [Swapping storage (JSON or SQLite)](#swapping-storage-json-or-sqlite)
+- [Swapping storage (JSON or PostgreSQL)](#swapping-storage-json-or-postgresql)
 - [Running it](#running-it)
 - [Continuous integration](#continuous-integration)
 - [Inspecting the database](#inspecting-the-database)
@@ -80,7 +80,7 @@ made between the two options it considered, Signals and NgRx.
 
 The store has two slices, one per feature:
 
-- **`weather`** - this month's typical weather.
+- **`typical`** - this month's typical weather.
 - **`forecast`** - the city list and the selected city's 5-day forecast.
 
 The components each talk to the store on their own; the root `App` is just a
@@ -116,7 +116,7 @@ Temperature.cs, City.cs, ForecastDay.cs](docs/backend_structure.png)
 
 Both features use the same shape: the controller calls a service, the service
 calls something behind an interface (a "port"), and a concrete driver fills that
-port. The month feature's port is `IMonthDataSource` (filled by SQLite or JSON);
+port. The month feature's port is `IMonthDataSource` (filled by PostgreSQL or JSON);
 the forecast feature's port is `IForecastSource` (filled by the Open-Meteo
 driver). Swapping a driver is a one-line change in `Program.cs` and nothing else
 in the app knows.
@@ -154,22 +154,33 @@ The month feature follows the same lifecycle: `TypicalWeather` dispatches
 `monthSelected` on load, the effect calls the backend, and `TemperatureDisplay`
 reads the result from the store.
 
-## Swapping storage (JSON or SQLite)
+## Swapping storage (JSON or PostgreSQL)
 
 The month feature's two drivers sit behind the same `IMonthDataSource`
 interface. Pick one in `Program.cs` - comment one line, uncomment the other:
 
 ```csharp
 // builder.Services.AddScoped<IMonthDataSource, JsonMonthDataSource>();  // file
-builder.Services.AddScoped<IMonthDataSource, SqlMonthDataSource>();      // SQLite (default)
+builder.Services.AddScoped<IMonthDataSource, SqlMonthDataSource>();      // database (default)
 ```
 
 Nothing else in the app changes - the controller, service, and repository never
 know which storage is behind the interface.
 
 - **JSON driver** reads `Repository/months.json`.
-- **SQLite driver** uses EF Core; the database file `weather.db` is created and
-  seeded automatically on startup by `EnsureCreated()`.
+- **SQL driver** uses EF Core against PostgreSQL. The table is created and seeded
+  on startup by `EnsureCreated()`.
+
+Note that the abstraction is two layers deep. `IMonthDataSource` decides *SQL or
+JSON*; EF Core then decides *which SQL engine*, in one line of `Program.cs`:
+
+```csharp
+options.UseNpgsql(connectionString)   // was UseSqlite("Data Source=weather.db")
+```
+
+The project ran on SQLite before this, and `SqlMonthDataSource`, the repository,
+the service and the controllers did not change by a single character. That is
+also why the class is called `SqlMonthDataSource` and not `SqliteMonthDataSource`.
 
 The forecast feature uses the same idea: `OpenMeteoForecastSource` sits behind
 `IForecastSource`, wired in `Program.cs` with `AddHttpClient`. Swap it for a
@@ -177,10 +188,32 @@ seeded driver by changing that one line.
 
 ## Running it
 
-Backend, from `weather-backend/`:
+**1. Start the database.** PostgreSQL runs in a Docker container:
+
+```bash
+docker run --name weather-postgres \
+  -e POSTGRES_USER=weather \
+  -e POSTGRES_PASSWORD=weather \
+  -e POSTGRES_DB=weatherapi \
+  -p 5432:5432 \
+  -d postgres:17
+```
+
+**2. Configure the connection string.** It is deliberately not in the repository:
 
 ```bash
 cd weather-backend
+cp appsettings.Development.example.json appsettings.Development.json
+# then fill in the password you used above
+```
+
+`appsettings.Development.json` is git-ignored, so a real password never gets
+committed. In CI and in the cloud the value comes from the environment variable
+`ConnectionStrings__WeatherDb` instead, which overrides the file.
+
+**3. Run the backend**, from `weather-backend/`:
+
+```bash
 dotnet run
 ```
 
@@ -204,23 +237,37 @@ Press `Ctrl+C` to stop either one.
 
 Every push to `main` triggers a pipeline in Azure DevOps, defined as code in
 [`azure-pipelines.yml`](azure-pipelines.yml). It spins up a fresh
-Microsoft-hosted Ubuntu agent, checks out the repository, installs the .NET SDK
-and builds the backend. If the build fails the run goes red, so broken code is
-caught automatically instead of by whoever pulls it next.
+Microsoft-hosted Ubuntu agent, then runs two jobs, one per half of the project,
+so a broken frontend cannot hide a broken backend:
 
-This is the first layer of a DevSecOps setup that is being built out step by
-step. Still to come: the frontend build, automated tests, quality gates (a pull
-request may only merge if the pipeline is green) and security scanning.
+- **Backend**: build, then 48 xUnit tests.
+- **Frontend**: `npm ci`, build, then 47 tests.
+
+Both publish their results and their coverage, so a run shows every test by name
+and, on a failure, the exact assertion that broke.
+
+The tests earn their keep: they caught a bug where the coordinates were formatted
+using the machine's locale, so a Dutch machine would have sent `52,37` instead of
+`52.37` and Open-Meteo would have rejected it. The app worked fine on the build
+agent, which runs an English locale. No amount of running the app would have found
+that.
+
+This is a DevSecOps setup that is still being built out. Still to come: quality
+gates (a pull request may only merge if the pipeline is green) and security
+scanning that blocks rather than warns.
 
 ## Inspecting the database
 
-When the SQLite driver is active, you can look inside `weather.db` directly with
-the `sqlite3` CLI (install it with `sudo apt install sqlite3`):
+When the SQL driver is active, you can look inside PostgreSQL with `psql`, which
+ships inside the container, so nothing needs installing:
 
 ```bash
-cd weather-backend
-echo "=== SELECT * FROM Temperatures ==="; sqlite3 -header -column weather.db "SELECT * FROM Temperatures;"
+docker exec -it weather-postgres psql -U weather -d weatherapi -c 'SELECT * FROM "Temperatures";'
 ```
+
+The double quotes around `"Temperatures"` are not optional: PostgreSQL folds
+unquoted identifiers to lower case, and EF Core created the table with a capital
+T.
 
 The forecast feature has no local database (its data is live), but you can see
 the raw data the frontend receives by opening the endpoint directly while the
@@ -232,10 +279,14 @@ http://localhost:5151/api/weather/forecast?city=Amsterdam
 
 ## Notes
 
-- `weather.db` is generated at runtime (and git-ignored) - it rebuilds itself
-  from the seed data in `WeatherDbContext`.
+- The database runs in Docker and is created and seeded on startup by
+  `EnsureCreated()`, from the seed data in `WeatherDbContext`. Nothing about it
+  is stored in the repository.
+- No password lives in git. `appsettings.Development.json` (your local values) is
+  git-ignored; `appsettings.Development.example.json` (a template) is committed.
+  CI and the cloud supply the value through `ConnectionStrings__WeatherDb`.
 - The forecast feature calls Open-Meteo (free, no API key). The list of
   supported cities and their coordinates lives in `Repository/DutchCities.cs`.
-- Backend targets .NET 10, storage via `Microsoft.EntityFrameworkCore.Sqlite`.
+- Backend targets .NET 10, storage via `Npgsql.EntityFrameworkCore.PostgreSQL`.
   Frontend uses Angular with `@ngrx/store`, `@ngrx/effects` and
   `@ngrx/store-devtools`.
