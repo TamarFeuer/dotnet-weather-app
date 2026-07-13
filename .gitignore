@@ -485,3 +485,7 @@ $RECYCLE.BIN/
 weather.db
 *.db-shm
 *.db-wal
+
+# Test reports written by the test runners (generated output, never commit)
+junit-results.xml
+*.trx
