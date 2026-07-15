@@ -3,7 +3,7 @@ using WeatherAPI.Controller;
 using WeatherAPI.Models;
 using WeatherAPI.Service;
 
-namespace WeatherAPI.Tests;
+namespace WeatherAPI.UnitTests;
 
 // Fake services. A controller's only job is translating HTTP into a service call
 // and the answer back into a status code, so that is exactly what we test: given

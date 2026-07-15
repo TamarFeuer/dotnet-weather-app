@@ -2,7 +2,7 @@ using WeatherAPI.Models;
 using WeatherAPI.Repository;
 using WeatherAPI.Service;
 
-namespace WeatherAPI.Tests;
+namespace WeatherAPI.UnitTests;
 
 // A fake repository. TypicalService only ever sees the ITypicalRepository
 // interface, so we can hand it this stub instead of the real one. No database, no

@@ -73,7 +73,7 @@ jobs:
           --collect:"XPlat Code Coverage"
           --results-directory "$(Agent.TempDirectory)/test-results"
         displayName: 'Test backend'
-        workingDirectory: 'weather-backend-tests'
+        workingDirectory: 'weather-backend-unit-tests'
 
       # Publish the results, which is what fills the "Tests" tab: every test by
       # name, its duration, and for a failure the exact message.
@@ -98,6 +98,29 @@ jobs:
         condition: succeededOrFailed()
         inputs:
           summaryFileLocation: '$(Agent.TempDirectory)/test-results/**/coverage.cobertura.xml'
+
+      # Integration tests. These boot the real app against a throwaway PostgreSQL
+      # container that Testcontainers starts on the agent. Microsoft-hosted Ubuntu
+      # agents ship with Docker, so this works with no extra setup, and the
+      # container is destroyed when the job ends.
+      #
+      # They run as a separate step, after the unit tests, because they are slower
+      # and need Docker. A failure here still fails the whole job.
+      - script: >
+          dotnet test --configuration Release
+          --logger "trx;LogFileName=integration-tests.trx"
+          --results-directory "$(Agent.TempDirectory)/test-results"
+        displayName: 'Integration-test backend'
+        workingDirectory: 'weather-backend-integration-tests'
+
+      - task: PublishTestResults@2
+        displayName: 'Publish integration test results'
+        condition: succeededOrFailed()
+        inputs:
+          testResultsFormat: 'VSTest'
+          testResultsFiles: '**/integration-tests.trx'
+          searchFolder: '$(Agent.TempDirectory)/test-results'
+          testRunTitle: 'Backend integration (Testcontainers)'
 
   # ==========================================================================
   # JOB 2 - FRONTEND (Angular / TypeScript)

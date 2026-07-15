@@ -2,7 +2,7 @@ using WeatherAPI.Models;
 using WeatherAPI.Repository;
 using WeatherAPI.Service;
 
-namespace WeatherAPI.Tests;
+namespace WeatherAPI.UnitTests;
 
 // A fake forecast source.
 //

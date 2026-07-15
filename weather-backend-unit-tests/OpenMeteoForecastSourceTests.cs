@@ -4,7 +4,7 @@ using System.Text;
 using WeatherAPI.Models;
 using WeatherAPI.Repository;
 
-namespace WeatherAPI.Tests;
+namespace WeatherAPI.UnitTests;
 
 // A stub HTTP layer. HttpClient does not send anything by itself: it hands the
 // request to an HttpMessageHandler, and THAT is what talks to the network. Swap

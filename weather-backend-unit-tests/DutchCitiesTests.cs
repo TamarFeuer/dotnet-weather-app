@@ -1,7 +1,7 @@
 using WeatherAPI.Models;
 using WeatherAPI.Repository;
 
-namespace WeatherAPI.Tests;
+namespace WeatherAPI.UnitTests;
 
 // DutchCities is plain reference data plus one lookup method, so these tests
 // need nothing at all: no fakes, no database, no network.

@@ -103,3 +103,9 @@ app.UseCors(AngularDev);   // apply the CORS policy (must come before MapControl
 app.MapControllers();   // hooks the controller routes into the request pipeline
 app.Run();
 
+// Top-level statements compile into a hidden, internal Program class. The
+// integration tests boot the whole app with WebApplicationFactory<Program>, and
+// for that they need to SEE this class. This one line exposes it. It changes
+// nothing about how the app runs.
+public partial class Program { }
+

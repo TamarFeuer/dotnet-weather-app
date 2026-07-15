@@ -1,7 +1,7 @@
 using WeatherAPI.Models;
 using WeatherAPI.Repository;
 
-namespace WeatherAPI.Tests;
+namespace WeatherAPI.UnitTests;
 
 // A fake storage driver. TypicalRepository talks to the IMonthDataSource port,
 // never to PostgreSQL or a JSON file directly, so we can hand it a plain in-memory
