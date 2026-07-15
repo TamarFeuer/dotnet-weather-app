@@ -4,7 +4,7 @@
 // Program.cs is where the app is wired up at startup. Everywhere else, classes
 // depend only on interfaces; here is where we decide which concrete class
 // implements each one (which service, which repository, which storage driver).
-using Microsoft.EntityFrameworkCore;  // UseNpgsql, EnsureCreated
+using Microsoft.EntityFrameworkCore;  // UseNpgsql, Migrate
 using WeatherAPI.Service;             // ITypicalService, TypicalService
 using WeatherAPI.Repository;          // repository, data-source port, drivers, DbContext
 
@@ -81,13 +81,22 @@ builder.Services.AddScoped<IForecastService, ForecastService>();
 
 WebApplication app = builder.Build();
 
-// On startup, make sure the database, the Temperatures table, and the seed
-// rows all exist. EnsureCreated builds the database from WeatherDbContext if it
-// isn't there yet (a simple alternative to EF "migrations" for a small app).
+// On startup, bring the database up to date by applying any migrations it has
+// not run yet. Migrate() reads the __EFMigrationsHistory table to see which
+// migrations are already applied, and runs only the missing ones.
+//
+// This replaces EnsureCreated(), which could only CREATE a fresh database and
+// never UPDATE an existing one - the reason a schema change used to mean
+// dropping the database. The two are mutually exclusive: a database made by
+// EnsureCreated has no history table, so it must be dropped once before
+// Migrate() can take over.
+//
+// (Django's manage.py migrate is the direct equivalent; EF's migration files
+// are the equivalent of Django's migrations/ folder.)
 using (IServiceScope scope = app.Services.CreateScope())
 {
     WeatherDbContext db = scope.ServiceProvider.GetRequiredService<WeatherDbContext>();
-    db.Database.EnsureCreated();
+    db.Database.Migrate();
 }
 
 app.UseCors(AngularDev);   // apply the CORS policy (must come before MapControllers)
