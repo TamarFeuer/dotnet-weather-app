@@ -25,7 +25,10 @@ param databasePassword string
 // Azure Database for PostgreSQL, "Flexible Server" - the managed PostgreSQL,
 // the cloud equivalent of our local Docker container.
 resource database 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
-  name: 'psql-${branchName}'          // e.g. psql-feature-branch-deploy
+  // CAF naming: <type>-<workload>-<environment>. The server's name becomes a
+  // PUBLIC DNS name (...postgres.database.azure.com), so it must be globally
+  // unique - uniqueString() adds a short deterministic hash per resource group.
+  name: 'psql-weatherapi-${branchName}-${uniqueString(resourceGroup().id)}'
   location: location
   sku: {
     name: 'Standard_B1ms'             // the cheapest "Burstable" size
@@ -37,6 +40,42 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
     administratorLoginPassword: databasePassword
     storage: {
       storageSizeGB: 32               // the smallest allowed
+    }
+  }
+}
+
+// --- The compute that runs the API ------------------------------------------
+
+// An App Service Plan is the machine that web apps run ON. One plan can host
+// several apps. Linux, and the Free (F1) tier so the branch environment costs
+// nothing to run.
+resource plan 'Microsoft.Web/serverfarms@2024-04-01' = {
+  // CAF: asp = App Service Plan (nothing to do with ASP.NET). Only unique within
+  // the resource group, so no global-uniqueness hash needed.
+  name: 'asp-weatherapi-${branchName}'
+  location: location
+  sku: {
+    name: 'F1'
+    tier: 'Free'
+  }
+  kind: 'linux'
+  properties: {
+    reserved: true                    // 'reserved: true' is how Azure marks a Linux plan
+  }
+}
+
+// The App Service that runs the WeatherAPI backend - the cloud equivalent of
+// `dotnet run`, on a public URL. It runs ON the plan above.
+resource api 'Microsoft.Web/sites@2024-04-01' = {
+  // CAF: app = web app. Like the database, its name becomes a public DNS name
+  // (...azurewebsites.net), so it must be globally unique - hence uniqueString().
+  name: 'app-weatherapi-${branchName}-${uniqueString(resourceGroup().id)}'
+  location: location
+  properties: {
+    serverFarmId: plan.id             // reference to the plan: run this app on it
+    siteConfig: {
+      linuxFxVersion: 'DOTNETCORE|10.0'   // the .NET 10 runtime
+      alwaysOn: false                     // the Free tier does not allow alwaysOn
     }
   }
 }
