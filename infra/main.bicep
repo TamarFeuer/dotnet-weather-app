@@ -6,7 +6,9 @@
 // and makes the resources. Everything is named after the branch, so each branch
 // gets its own isolated copy and nothing collides.
 //
-// Starting small: for now this is only the PostgreSQL database. The app follows.
+// It describes a whole branch environment: a PostgreSQL database, an App Service
+// that runs the API, and the wiring between them (a firewall rule and the
+// connection string).
 
 // --- Inputs: values passed in from outside (the pipeline supplies them) ------
 
@@ -44,6 +46,27 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   }
 }
 
+// The actual database INSIDE the server. The server above is the building; this
+// is the database our app connects to and EF Core migrates. Its name matches the
+// Database= in the connection string. `parent: database` nests it in the server.
+resource weatherDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
+  parent: database
+  name: 'weatherdb'
+}
+
+// A firewall rule so other Azure services (like our App Service) can reach the
+// database. The special range 0.0.0.0-0.0.0.0 means "allow any Azure service" -
+// the simplest option for a demo. A tighter setup would use a private network,
+// which is a good "security by design" improvement for later.
+resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
+  parent: database
+  name: 'AllowAllAzureServicesAndResourcesWithinAzureIps'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
 // --- The compute that runs the API ------------------------------------------
 
 // An App Service Plan is the machine that web apps run ON. One plan can host
@@ -76,6 +99,17 @@ resource api 'Microsoft.Web/sites@2024-04-01' = {
     siteConfig: {
       linuxFxVersion: 'DOTNETCORE|10.0'   // the .NET 10 runtime
       alwaysOn: false                     // the Free tier does not allow alwaysOn
+      appSettings: [
+        {
+          // The exact environment variable the app already reads
+          // (ConnectionStrings__WeatherDb), built from the server's address and
+          // the password. This is how the deployed API finds its database, the
+          // same mechanism the integration tests use. Ssl Mode=Require because
+          // Azure PostgreSQL only accepts encrypted connections.
+          name: 'ConnectionStrings__WeatherDb'
+          value: 'Host=${database.properties.fullyQualifiedDomainName};Port=5432;Database=weatherdb;Username=weather;Password=${databasePassword};Ssl Mode=Require'
+        }
+      ]
     }
   }
 }

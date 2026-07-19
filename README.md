@@ -194,7 +194,7 @@ seeded driver by changing that one line.
 docker run --name weather-postgres \
   -e POSTGRES_USER=weather \
   -e POSTGRES_PASSWORD=weather \
-  -e POSTGRES_DB=weatherapi \
+  -e POSTGRES_DB=weatherdb \
   -p 5432:5432 \
   -d postgres:17
 ```
@@ -262,7 +262,7 @@ When the SQL driver is active, you can look inside PostgreSQL with `psql`, which
 ships inside the container, so nothing needs installing:
 
 ```bash
-docker exec -it weather-postgres psql -U weather -d weatherapi -c 'SELECT * FROM "Temperatures";'
+docker exec -it weather-postgres psql -U weather -d weatherdb -c 'SELECT * FROM "Temperatures";'
 ```
 
 The double quotes around `"Temperatures"` are not optional: PostgreSQL folds
