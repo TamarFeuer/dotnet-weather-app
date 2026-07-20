@@ -37,170 +37,183 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
-jobs:
+# The pipeline is organised into STAGES: big boxes of work that run in order. A
+# stage groups one or more jobs. Today there is a single stage (Build), which
+# just holds the build-and-test jobs we already had. The point of naming it is
+# that the next step adds a second stage (Deploy) that runs AFTER this one, only
+# when a pull request is open.
+stages:
   # ==========================================================================
-  # JOB 1 - BACKEND (.NET / C#)
+  # STAGE 1 - BUILD AND TEST
   # ==========================================================================
-  - job: Backend
-    displayName: 'Backend: build and test'
-    steps:
-      # Install the .NET 10 SDK on the build machine.
-      - task: UseDotNet@2
-        displayName: 'Install .NET 10 SDK'
-        inputs:
-          packageType: 'sdk'
-          version: '10.0.x'
+  # Everything that proves the code is correct: build both halves and run every
+  # test. If anything here fails, the Deploy stage (added next) never runs.
+  - stage: Build
+    displayName: 'Build and test'
+    jobs:
+      # ======================================================================
+      # JOB 1 - BACKEND (.NET / C#)
+      # ======================================================================
+      - job: Backend
+        displayName: 'Backend: build and test'
+        steps:
+          # Install the .NET 10 SDK on the build machine.
+          - task: UseDotNet@2
+            displayName: 'Install .NET 10 SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '10.0.x'
 
-      # Restore the NuGet dependencies (e.g. Npgsql.EntityFrameworkCore.PostgreSQL).
-      - script: dotnet restore
-        displayName: 'Restore dependencies'
-        workingDirectory: 'weather-backend'
+          # Restore the NuGet dependencies (e.g. Npgsql.EntityFrameworkCore.PostgreSQL).
+          - script: dotnet restore
+            displayName: 'Restore dependencies'
+            workingDirectory: 'weather-backend'
 
-      # Build in Release. If this fails, this job fails.
-      - script: dotnet build --configuration Release --no-restore
-        displayName: 'Build backend'
-        workingDirectory: 'weather-backend'
+          # Build in Release. If this fails, this job fails.
+          - script: dotnet build --configuration Release --no-restore
+            displayName: 'Build backend'
+            workingDirectory: 'weather-backend'
 
-      # Run the xUnit tests.
-      #   --logger  writes the results to a .trx file (Microsoft's test report
-      #             format) instead of only printing them, so the next step can
-      #             hand them to Azure.
-      #   --collect gathers code coverage: which lines of the app were actually
-      #             executed by the tests. It lands as a Cobertura XML file.
-      - script: >
-          dotnet test --configuration Release
-          --logger "trx;LogFileName=backend-tests.trx"
-          --collect:"XPlat Code Coverage"
-          --results-directory "$(Agent.TempDirectory)/test-results"
-        displayName: 'Test backend'
-        workingDirectory: 'weather-backend-unit-tests'
+          # Run the xUnit tests.
+          #   --logger  writes the results to a .trx file (Microsoft's test report
+          #             format) instead of only printing them, so the next step can
+          #             hand them to Azure.
+          #   --collect gathers code coverage: which lines of the app were actually
+          #             executed by the tests. It lands as a Cobertura XML file.
+          - script: >
+              dotnet test --configuration Release
+              --logger "trx;LogFileName=backend-tests.trx"
+              --collect:"XPlat Code Coverage"
+              --results-directory "$(Agent.TempDirectory)/test-results"
+            displayName: 'Test backend'
+            workingDirectory: 'weather-backend-unit-tests'
 
-      # Publish the results, which is what fills the "Tests" tab: every test by
-      # name, its duration, and for a failure the exact message.
-      #
-      # condition: succeededOrFailed() is the crucial bit. Azure normally SKIPS
-      # a step once an earlier step in the job has failed. But a failing test run
-      # is precisely when you most want the report. Without this condition, a red
-      # build would publish nothing and you would be left digging through logs.
-      - task: PublishTestResults@2
-        displayName: 'Publish backend test results'
-        condition: succeededOrFailed()
-        inputs:
-          testResultsFormat: 'VSTest'
-          testResultsFiles: '**/backend-tests.trx'
-          searchFolder: '$(Agent.TempDirectory)/test-results'
-          testRunTitle: 'Backend (xUnit)'
+          # Publish the results, which is what fills the "Tests" tab: every test by
+          # name, its duration, and for a failure the exact message.
+          #
+          # condition: succeededOrFailed() is the crucial bit. Azure normally SKIPS
+          # a step once an earlier step in the job has failed. But a failing test run
+          # is precisely when you most want the report. Without this condition, a red
+          # build would publish nothing and you would be left digging through logs.
+          - task: PublishTestResults@2
+            displayName: 'Publish backend test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/backend-tests.trx'
+              searchFolder: '$(Agent.TempDirectory)/test-results'
+              testRunTitle: 'Backend (xUnit)'
 
-      # Publish the coverage report, which fills the "Code Coverage" tab.
-      # dotnet test drops it in a GUID-named subfolder, hence the ** wildcard.
-      - task: PublishCodeCoverageResults@2
-        displayName: 'Publish backend code coverage'
-        condition: succeededOrFailed()
-        inputs:
-          summaryFileLocation: '$(Agent.TempDirectory)/test-results/**/coverage.cobertura.xml'
+          # Publish the coverage report, which fills the "Code Coverage" tab.
+          # dotnet test drops it in a GUID-named subfolder, hence the ** wildcard.
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish backend code coverage'
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: '$(Agent.TempDirectory)/test-results/**/coverage.cobertura.xml'
 
-      # Integration tests. These boot the real app against a throwaway PostgreSQL
-      # container that Testcontainers starts on the agent. Microsoft-hosted Ubuntu
-      # agents ship with Docker, so this works with no extra setup, and the
-      # container is destroyed when the job ends.
-      #
-      # They run as a separate step, after the unit tests, because they are slower
-      # and need Docker. A failure here still fails the whole job.
-      - script: >
-          dotnet test --configuration Release
-          --logger "trx;LogFileName=integration-tests.trx"
-          --results-directory "$(Agent.TempDirectory)/test-results"
-        displayName: 'Integration-test backend'
-        workingDirectory: 'weather-backend-integration-tests'
+          # Integration tests. These boot the real app against a throwaway PostgreSQL
+          # container that Testcontainers starts on the agent. Microsoft-hosted Ubuntu
+          # agents ship with Docker, so this works with no extra setup, and the
+          # container is destroyed when the job ends.
+          #
+          # They run as a separate step, after the unit tests, because they are slower
+          # and need Docker. A failure here still fails the whole job.
+          - script: >
+              dotnet test --configuration Release
+              --logger "trx;LogFileName=integration-tests.trx"
+              --results-directory "$(Agent.TempDirectory)/test-results"
+            displayName: 'Integration-test backend'
+            workingDirectory: 'weather-backend-integration-tests'
 
-      - task: PublishTestResults@2
-        displayName: 'Publish integration test results'
-        condition: succeededOrFailed()
-        inputs:
-          testResultsFormat: 'VSTest'
-          testResultsFiles: '**/integration-tests.trx'
-          searchFolder: '$(Agent.TempDirectory)/test-results'
-          testRunTitle: 'Backend integration (Testcontainers)'
+          - task: PublishTestResults@2
+            displayName: 'Publish integration test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/integration-tests.trx'
+              searchFolder: '$(Agent.TempDirectory)/test-results'
+              testRunTitle: 'Backend integration (Testcontainers)'
 
-  # ==========================================================================
-  # JOB 2 - FRONTEND (Angular / TypeScript)
-  # ==========================================================================
-  - job: Frontend
-    displayName: 'Frontend: build and test'
-    steps:
-      # Install Node.js. This is the frontend twin of UseDotNet: the machine
-      # does not ship with the version we want, so the pipeline installs it.
-      # (UseNode@1 replaces the deprecated NodeTool@0.)
-      #
-      # The version has to MATCH the one used locally. package-lock.json was
-      # generated by npm 11 (which ships with Node 24). An older npm reads that
-      # same lock file as incomplete and npm ci fails with "Missing ... from
-      # lock file". Pinning the dependencies is not enough: the tool that reads
-      # the lock file has to be pinned too.
-      - task: UseNode@1
-        displayName: 'Install Node.js 24'
-        inputs:
-          version: '24.x'
+      # ======================================================================
+      # JOB 2 - FRONTEND (Angular / TypeScript)
+      # ======================================================================
+      - job: Frontend
+        displayName: 'Frontend: build and test'
+        steps:
+          # Install Node.js. This is the frontend twin of UseDotNet: the machine
+          # does not ship with the version we want, so the pipeline installs it.
+          # (UseNode@1 replaces the deprecated NodeTool@0.)
+          #
+          # The version has to MATCH the one used locally. package-lock.json was
+          # generated by npm 11 (which ships with Node 24). An older npm reads that
+          # same lock file as incomplete and npm ci fails with "Missing ... from
+          # lock file". Pinning the dependencies is not enough: the tool that reads
+          # the lock file has to be pinned too.
+          - task: UseNode@1
+            displayName: 'Install Node.js 24'
+            inputs:
+              version: '24.x'
 
-      # npm ci, not npm install. It installs exactly what package-lock.json
-      # pins and fails if package.json and the lock file disagree. That makes
-      # the build reproducible instead of "whatever npm resolved today".
-      - script: npm ci
-        displayName: 'Install dependencies'
-        workingDirectory: 'weather-frontend'
+          # npm ci, not npm install. It installs exactly what package-lock.json
+          # pins and fails if package.json and the lock file disagree. That makes
+          # the build reproducible instead of "whatever npm resolved today".
+          - script: npm ci
+            displayName: 'Install dependencies'
+            workingDirectory: 'weather-frontend'
 
-      # Build the production bundle. If Angular or TypeScript does not compile,
-      # this job fails.
-      - script: npm run build
-        displayName: 'Build frontend'
-        workingDirectory: 'weather-frontend'
+          # Build the production bundle. If Angular or TypeScript does not compile,
+          # this job fails.
+          - script: npm run build
+            displayName: 'Build frontend'
+            workingDirectory: 'weather-frontend'
 
-      # Run the unit tests.
-      #
-      # --watch=false is essential. By default ng test runs the suite and then
-      # STAYS OPEN, waiting for a file to change so it can re-run. That is useful
-      # while developing, but in a pipeline the step would never finish and the
-      # job would hang until it times out. The extra "--" tells npm to pass the
-      # flags through to ng rather than swallow them itself.
-      #
-      # The reporters do two things at once: "junit" writes a machine-readable
-      # report for Azure (--output-file applies to the FIRST reporter, hence the
-      # order), and "default" keeps the human-readable output in the log.
-      #
-      # --coverage records which lines the tests actually executed, in the same
-      # Cobertura format the backend produces, so both land in one report.
-      #
-      # --coverage-include is what makes that number honest. By default the tool
-      # only reports files a test happened to load, so a file nobody tests at all
-      # stays INVISIBLE instead of counting as zero, and the percentage flatters
-      # you. Naming every source file forces the untested ones to show up.
-      - script: >
-          npm test --
-          --watch=false
-          --reporters=junit
-          --reporters=default
-          --output-file=junit-results.xml
-          --coverage
-          --coverage-reporters=cobertura
-          --coverage-include='src/app/**/*.ts'
-          --coverage-include='src/app/**/*.html'
-        displayName: 'Test frontend'
-        workingDirectory: 'weather-frontend'
+          # Run the unit tests.
+          #
+          # --watch=false is essential. By default ng test runs the suite and then
+          # STAYS OPEN, waiting for a file to change so it can re-run. That is useful
+          # while developing, but in a pipeline the step would never finish and the
+          # job would hang until it times out. The extra "--" tells npm to pass the
+          # flags through to ng rather than swallow them itself.
+          #
+          # The reporters do two things at once: "junit" writes a machine-readable
+          # report for Azure (--output-file applies to the FIRST reporter, hence the
+          # order), and "default" keeps the human-readable output in the log.
+          #
+          # --coverage records which lines the tests actually executed, in the same
+          # Cobertura format the backend produces, so both land in one report.
+          #
+          # --coverage-include is what makes that number honest. By default the tool
+          # only reports files a test happened to load, so a file nobody tests at all
+          # stays INVISIBLE instead of counting as zero, and the percentage flatters
+          # you. Naming every source file forces the untested ones to show up.
+          - script: >
+              npm test --
+              --watch=false
+              --reporters=junit
+              --reporters=default
+              --output-file=junit-results.xml
+              --coverage
+              --coverage-reporters=cobertura
+              --coverage-include='src/app/**/*.ts'
+              --coverage-include='src/app/**/*.html'
+            displayName: 'Test frontend'
+            workingDirectory: 'weather-frontend'
 
-      # Publish the results into the same "Tests" tab as the backend ones.
-      # succeededOrFailed() again: publish the report even when tests are red,
-      # because that is exactly when you need it.
-      - task: PublishTestResults@2
-        displayName: 'Publish frontend test results'
-        condition: succeededOrFailed()
-        inputs:
-          testResultsFormat: 'JUnit'
-          testResultsFiles: 'weather-frontend/junit-results.xml'
-          testRunTitle: 'Frontend (Vitest)'
+          # Publish the results into the same "Tests" tab as the backend ones.
+          # succeededOrFailed() again: publish the report even when tests are red,
+          # because that is exactly when you need it.
+          - task: PublishTestResults@2
+            displayName: 'Publish frontend test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'weather-frontend/junit-results.xml'
+              testRunTitle: 'Frontend (Vitest)'
 
-      # Publish the coverage report into the same "Code Coverage" tab.
-      - task: PublishCodeCoverageResults@2
-        displayName: 'Publish frontend code coverage'
-        condition: succeededOrFailed()
-        inputs:
-          summaryFileLocation: 'weather-frontend/coverage/**/cobertura-coverage.xml'
+          # Publish the coverage report into the same "Code Coverage" tab.
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish frontend code coverage'
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: 'weather-frontend/coverage/**/cobertura-coverage.xml'
