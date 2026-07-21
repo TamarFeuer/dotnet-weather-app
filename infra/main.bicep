@@ -109,10 +109,44 @@ resource api 'Microsoft.Web/sites@2024-04-01' = {
           name: 'ConnectionStrings__WeatherDb'
           value: 'Host=${database.properties.fullyQualifiedDomainName};Port=5432;Database=weatherdb;Username=weather;Password=${databasePassword};Ssl Mode=Require'
         }
+        {
+          // Let the deployed backend accept requests from the deployed frontend,
+          // which lives on a different origin. The app reads this as the
+          // Cors__AllowedOrigins config value; here it is the Storage static-website
+          // URL. Referencing the storage account makes Bicep create it first.
+          name: 'Cors__AllowedOrigins'
+          value: frontend.properties.primaryEndpoints.web
+        }
       ]
     }
   }
 }
+
+// --- The frontend host -------------------------------------------------------
+
+// A Storage account whose "static website" feature serves the built Angular app
+// on a public URL. Static files need no compute, so this is far cheaper than
+// serving them from the App Service. Storage account names are global DNS names
+// and allow only lowercase letters and digits (no hyphens), max 24 characters -
+// so there is no room for the branch name. CAF prefix st + weather + fe
+// (frontend), then the per-resource-group hash, which is already unique per
+// branch. st(2) + weatherfe(9) + hash(13) = 24, exactly the maximum.
+resource frontend 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+  name: 'stweatherfe${uniqueString(resourceGroup().id)}'
+  location: location
+  sku: {
+    name: 'Standard_LRS'              // cheapest redundancy: locally redundant
+  }
+  kind: 'StorageV2'                   // required for static website hosting
+  properties: {
+    allowBlobPublicAccess: true       // the static site is served anonymously
+    minimumTlsVersion: 'TLS1_2'
+  }
+}
+
+// Note: turning ON the static website feature is a data-plane action Bicep
+// cannot express, so the pipeline enables it with `az storage blob
+// service-properties update --static-website` right before it uploads the files.
 
 // --- Outputs: values the pipeline reads back after deploying -----------------
 
@@ -124,3 +158,7 @@ output appName string = api.name
 // The public URL of the deployed API, so the pipeline can report where the
 // branch environment is running.
 output appUrl string = 'https://${api.properties.defaultHostName}'
+
+// The static-website URL of the deployed frontend. The pipeline uploads the
+// built Angular app here, and posts this URL on the pull request.
+output frontendUrl string = frontend.properties.primaryEndpoints.web
