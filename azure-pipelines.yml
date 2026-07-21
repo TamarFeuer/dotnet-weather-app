@@ -217,3 +217,120 @@ stages:
             condition: succeededOrFailed()
             inputs:
               summaryFileLocation: 'weather-frontend/coverage/**/cobertura-coverage.xml'
+
+  # ==========================================================================
+  # STAGE 2 - DEPLOY BRANCH ENVIRONMENT
+  # ==========================================================================
+  # Stand up an isolated copy of the app in Azure, named after the branch. It
+  # runs ONLY for a pull request (Build.Reason), and only if the Build stage was
+  # green (dependsOn + succeeded). So a normal push to main never deploys here,
+  # and broken code never reaches Azure.
+  - stage: Deploy
+    displayName: 'Deploy branch environment'
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - job: Deploy
+        displayName: 'Deploy infrastructure and app'
+        steps:
+          # The Bicep template lives in the repo, so we need the source on the agent.
+          - checkout: self
+
+          # ----------------------------------------------------------------
+          # Turn the branch name into a safe Azure resource name (Emrah's SLUG).
+          # ----------------------------------------------------------------
+          # Azure resource names cannot contain slashes or uppercase letters, so
+          # 'feature/branch-deploy' must become something like 'branch-deploy'.
+          # We store it as a normal pipeline variable so the steps below reuse it.
+          - task: Bash@3
+            displayName: 'Compute a safe branch slug'
+            inputs:
+              targetType: inline
+              script: |
+                set -euo pipefail
+                # On a PR build the real branch is in System.PullRequest.SourceBranch;
+                # fall back to Build.SourceBranch for a manual run.
+                RAW="$(System.PullRequest.SourceBranch)"
+                if [ -z "$RAW" ]; then RAW="$(Build.SourceBranch)"; fi
+                RAW="${RAW#refs/heads/}"
+                # lowercase, replace non-alphanumerics with hyphens, squeeze and trim
+                # hyphens, then cap the length so the resource names stay well within
+                # Azure's limits.
+                SLUG=$(echo "$RAW" \
+                  | tr '[:upper:]' '[:lower:]' \
+                  | sed 's/[^a-z0-9]/-/g; s/-\{2,\}/-/g; s/^-//; s/-$//')
+                SLUG="${SLUG:0:20}"
+                SLUG="${SLUG%-}"
+                echo "Branch '$RAW' -> slug '$SLUG'"
+                # Publish it as a pipeline variable the later steps can read as $(branchSlug).
+                echo "##vso[task.setvariable variable=branchSlug]$SLUG"
+
+          # ----------------------------------------------------------------
+          # Deploy the infrastructure: resource group + Bicep template.
+          # ----------------------------------------------------------------
+          # Authenticated through the azure-weatherapi-deploy service connection.
+          # This is the exact pair of commands we ran by hand, now automated:
+          # create the resource group, then deploy main.bicep into it. The database
+          # password comes from the secret pipeline variable, never from the file.
+          - task: AzureCLI@2
+            displayName: 'Deploy infrastructure (resource group + Bicep)'
+            inputs:
+              azureSubscription: 'azure-weatherapi-deploy'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                RG="rg-weatherapi-$(branchSlug)"
+                LOCATION="francecentral"
+                echo "Ensuring resource group $RG in $LOCATION..."
+                az group create --name "$RG" --location "$LOCATION" --output none
+                echo "Deploying infra/main.bicep..."
+                az deployment group create \
+                  --resource-group "$RG" \
+                  --name "weatherapi-$(branchSlug)" \
+                  --template-file infra/main.bicep \
+                  --parameters branchName="$(branchSlug)" databasePassword="$(databasePassword)" \
+                  --output none
+                # Read the outputs back so the code-deploy step knows which app to
+                # target, and so we can print where the environment is running.
+                APP_NAME=$(az deployment group show --resource-group "$RG" \
+                  --name "weatherapi-$(branchSlug)" \
+                  --query properties.outputs.appName.value -o tsv)
+                APP_URL=$(az deployment group show --resource-group "$RG" \
+                  --name "weatherapi-$(branchSlug)" \
+                  --query properties.outputs.appUrl.value -o tsv)
+                echo "Infrastructure deployed. App service: $APP_NAME ($APP_URL)"
+                echo "##vso[task.setvariable variable=appName]$APP_NAME"
+                echo "##vso[task.setvariable variable=appUrl]$APP_URL"
+
+          # ----------------------------------------------------------------
+          # Build and publish the API, then push it to the App Service.
+          # ----------------------------------------------------------------
+          # This Deploy job runs on its own fresh machine, so it needs the .NET
+          # SDK installed before it can publish (the Build stage's machine is gone).
+          - task: UseDotNet@2
+            displayName: 'Install .NET 10 SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '10.0.x'
+
+          # dotnet publish produces a self-contained folder of the compiled app,
+          # ready to run - the cloud equivalent of the build output we test locally.
+          - script: >
+              dotnet publish --configuration Release
+              --output "$(Build.ArtifactStagingDirectory)/app"
+            displayName: 'Publish the API'
+            workingDirectory: 'weather-backend'
+
+          # Upload that folder to the App Service, through the same service
+          # connection. Azure zips the folder, swaps it in, and restarts the app.
+          # On startup the app reads its connection string (wired in by the Bicep)
+          # and runs its EF Core migrations, exactly like the integration tests.
+          - task: AzureWebApp@1
+            displayName: 'Deploy app code to the App Service'
+            inputs:
+              azureSubscription: 'azure-weatherapi-deploy'
+              appType: 'webAppLinux'
+              appName: '$(appName)'
+              package: '$(Build.ArtifactStagingDirectory)/app'
+              runtimeStack: 'DOTNETCORE|10.0'

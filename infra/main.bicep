@@ -113,3 +113,14 @@ resource api 'Microsoft.Web/sites@2024-04-01' = {
     }
   }
 }
+
+// --- Outputs: values the pipeline reads back after deploying -----------------
+
+// The App Service's generated name (it includes the uniqueString hash, so the
+// pipeline cannot guess it). The deploy stage reads this to know which app to
+// push the code to.
+output appName string = api.name
+
+// The public URL of the deployed API, so the pipeline can report where the
+// branch environment is running.
+output appUrl string = 'https://${api.properties.defaultHostName}'

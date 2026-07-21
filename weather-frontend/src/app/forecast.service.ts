@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { environment } from '../environments/environment';
 
 // The shape of one forecast day the API returns (matches the backend's
 // ForecastDay model). `date` is a string here because JSON has no date type -
@@ -17,7 +18,7 @@ export interface ForecastDay {
 // one-class-one-job split we made on the backend.
 @Injectable({ providedIn: 'root' })
 export class ForecastService {
-	private readonly baseUrl = 'http://localhost:5151/api/weather';
+	private readonly baseUrl = environment.apiBaseUrl;
 
 	constructor(private http: HttpClient) {}
 
