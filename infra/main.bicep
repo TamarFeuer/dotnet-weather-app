@@ -162,3 +162,7 @@ output appUrl string = 'https://${api.properties.defaultHostName}'
 // The static-website URL of the deployed frontend. The pipeline uploads the
 // built Angular app here, and posts this URL on the pull request.
 output frontendUrl string = frontend.properties.primaryEndpoints.web
+
+// The Storage account's name, so the pipeline can target it with the az storage
+// commands that enable the static website and upload the files.
+output frontendStorageName string = frontend.name

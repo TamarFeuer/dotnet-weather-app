@@ -299,9 +299,19 @@ stages:
                 APP_URL=$(az deployment group show --resource-group "$RG" \
                   --name "weatherapi-$(branchSlug)" \
                   --query properties.outputs.appUrl.value -o tsv)
-                echo "Infrastructure deployed. App service: $APP_NAME ($APP_URL)"
+                FRONTEND_URL=$(az deployment group show --resource-group "$RG" \
+                  --name "weatherapi-$(branchSlug)" \
+                  --query properties.outputs.frontendUrl.value -o tsv)
+                FRONTEND_STORAGE=$(az deployment group show --resource-group "$RG" \
+                  --name "weatherapi-$(branchSlug)" \
+                  --query properties.outputs.frontendStorageName.value -o tsv)
+                echo "Infrastructure deployed."
+                echo "  Backend:  $APP_URL"
+                echo "  Frontend: $FRONTEND_URL"
                 echo "##vso[task.setvariable variable=appName]$APP_NAME"
                 echo "##vso[task.setvariable variable=appUrl]$APP_URL"
+                echo "##vso[task.setvariable variable=frontendUrl]$FRONTEND_URL"
+                echo "##vso[task.setvariable variable=frontendStorage]$FRONTEND_STORAGE"
 
           # ----------------------------------------------------------------
           # Build and publish the API, then push it to the App Service.
@@ -334,3 +344,64 @@ stages:
               appName: '$(appName)'
               package: '$(Build.ArtifactStagingDirectory)/app'
               runtimeStack: 'DOTNETCORE|10.0'
+
+          # ----------------------------------------------------------------
+          # Build the frontend pointed at THIS branch's backend, then upload it.
+          # ----------------------------------------------------------------
+          # Replace the placeholder in environment.prod.ts with the real backend
+          # URL (plus the /api/weather path the services expect). A production
+          # build then bakes this value in via the fileReplacements rule.
+          # A '#' sed delimiter is used because the URL contains slashes.
+          - script: |
+              set -euo pipefail
+              sed -i "s#API_BASE_URL_PLACEHOLDER#$(appUrl)/api/weather#" \
+                src/environments/environment.prod.ts
+              echo "Frontend will call: $(appUrl)/api/weather"
+            displayName: 'Inject the backend URL into the frontend'
+            workingDirectory: 'weather-frontend'
+
+          - task: UseNode@1
+            displayName: 'Install Node.js 24'
+            inputs:
+              version: '24.x'
+
+          - script: npm ci
+            displayName: 'Install frontend dependencies'
+            workingDirectory: 'weather-frontend'
+
+          - script: npm run build
+            displayName: 'Build the frontend'
+            workingDirectory: 'weather-frontend'
+
+          # Enable the static website and upload the built files. Authenticated
+          # through the same service connection. The service principal is a
+          # Contributor, which may LIST the storage keys (a control-plane action)
+          # but does not by itself have blob DATA access - so we fetch a key and
+          # use it for the two data-plane commands below.
+          - task: AzureCLI@2
+            displayName: 'Enable static website and upload the frontend'
+            inputs:
+              azureSubscription: 'azure-weatherapi-deploy'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                RG="rg-weatherapi-$(branchSlug)"
+                ACCOUNT="$(frontendStorage)"
+                KEY=$(az storage account keys list --resource-group "$RG" \
+                  --account-name "$ACCOUNT" --query "[0].value" -o tsv)
+                echo "Enabling static website on $ACCOUNT..."
+                az storage blob service-properties update \
+                  --account-name "$ACCOUNT" --account-key "$KEY" \
+                  --static-website --index-document index.html \
+                  --404-document index.html \
+                  --output none
+                echo "Uploading the built frontend to \$web..."
+                az storage blob upload-batch \
+                  --account-name "$ACCOUNT" --account-key "$KEY" \
+                  --destination '$web' \
+                  --source dist/weather-frontend/browser \
+                  --overwrite \
+                  --output none
+                echo "Frontend uploaded to $(frontendUrl)"
+              workingDirectory: 'weather-frontend'
