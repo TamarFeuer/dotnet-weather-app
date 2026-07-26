@@ -248,9 +248,12 @@ and, on a failure, the exact assertion that broke.
 
 The tests earn their keep: they caught a bug where the coordinates were formatted
 using the machine's locale, so a Dutch machine would have sent `52,37` instead of
-`52.37` and Open-Meteo would have rejected it. The app worked fine on the build
-agent, which runs an English locale. No amount of running the app would have found
-that.
+`52.37`. Open-Meteo does not reject that - it reads the comma as a coordinate-list
+separator, so `52,37` becomes the two latitudes `[52, 37]` and the app silently
+gets back a forecast for the wrong place (a `200 OK` with plausible but wrong
+data), not an error. The app worked fine on the build agent, which runs an English
+locale, so no amount of running the app there would have found it; a unit test that
+forces a comma-locale is what caught it.
 
 This is a DevSecOps setup that is still being built out. Still to come: quality
 gates (a pull request may only merge if the pipeline is green) and security
