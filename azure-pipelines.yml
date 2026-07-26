@@ -305,7 +305,7 @@ stages:
                   --resource-group "$RG" \
                   --name "weatherapi-$(branchSlug)" \
                   --template-file infra/main.bicep \
-                  --parameters branchName="$(branchSlug)" databasePassword="$(databasePassword)" \
+                  --parameters branchName="$(branchSlug)" databasePassword="$DB_PASSWORD" \
                   --output none
                 # Read the outputs back so the code-deploy step knows which app to
                 # target, and so we can print where the environment is running.
@@ -328,6 +328,13 @@ stages:
                 echo "##vso[task.setvariable variable=appUrl]$APP_URL"
                 echo "##vso[task.setvariable variable=frontendUrl]$FRONTEND_URL"
                 echo "##vso[task.setvariable variable=frontendStorage]$FRONTEND_STORAGE"
+            env:
+              # Pass the DB password as an env var rather than via the
+              # $(databasePassword) macro. Macro substitution pastes the value into
+              # the script as raw text, so a '$' inside the password would be
+              # re-parsed by bash as a variable reference (and set -u then fails).
+              # An env var expands to its literal value without that re-parsing.
+              DB_PASSWORD: $(databasePassword)
 
           # ----------------------------------------------------------------
           # Build and publish the API, then push it to the App Service.
