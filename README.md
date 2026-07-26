@@ -32,6 +32,7 @@ GET /api/weather/forecast?city=Amsterdam
 - [Swapping storage (JSON or PostgreSQL)](#swapping-storage-json-or-postgresql)
 - [Running it](#running-it)
 - [Continuous integration](#continuous-integration)
+- [Continuous delivery](#continuous-delivery)
 - [Inspecting the database](#inspecting-the-database)
 - [Notes](#notes)
 
@@ -255,6 +256,34 @@ two-element response and the forecast request fails - and all of it only on a ma
 with a comma decimal separator. The app worked fine on the build agent, which runs an
 English locale, so no amount of running the app there would have found it; a unit test
 that forces a comma-locale is what caught it.
+
+## Continuous delivery
+
+The pipeline does more than test. On every **pull request**, it deploys an
+isolated **preview environment** to Azure - a private, running copy of the whole
+app, just for that branch - and tears it down again automatically when the PR
+closes, so nothing lingers or keeps costing money.
+
+Each environment is described as **infrastructure-as-code** in
+[`infra/main.bicep`](infra/main.bicep) (Bicep), named after the branch so nothing
+collides:
+
+- **Backend** → an Azure **App Service** (the .NET API)
+- **Frontend** → an Azure **Storage static website** (the built Angular app)
+- **Database** → **Azure Database for PostgreSQL** (Flexible Server)
+
+The pieces are wired together at deploy time: the frontend is built pointing at
+*this branch's* backend URL, and the backend's CORS policy is set to allow *this
+branch's* frontend origin. The deployed URLs are posted as a comment on the pull
+request, so a reviewer can click straight through to the running app.
+
+Everything for a branch lives in its own resource group
+(`rg-weatherapi-<branch>`), which is what makes teardown a single, clean delete.
+That teardown runs as a **GitHub Actions** workflow
+([`.github/workflows/teardown.yml`](.github/workflows/teardown.yml)) on PR close -
+it covers the one event Azure DevOps' pull-request trigger does not fire on. The
+whole path authenticates as a least-privilege **service principal**, and no
+secret is ever committed to git (see [`docs/security.md`](docs/security.md)).
 
 This is a DevSecOps setup that is still being built out. Still to come: quality
 gates (a pull request may only merge if the pipeline is green) and security
