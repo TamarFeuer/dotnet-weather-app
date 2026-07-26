@@ -26,6 +26,12 @@
   repository with **Pull requests: read and write**, stored as a **secret pipeline variable**.
   The pipeline uses it to post the deployed URLs as a comment on the pull request. Least
   privilege caps the blast radius if it leaks. *Not in git.*
+- **Azure credentials for teardown (`AZURE_CREDENTIALS`)** — a **GitHub Actions secret** holding
+  a JSON blob (clientId, clientSecret, subscriptionId, tenantId) so the teardown workflow can log
+  in to Azure and delete a branch's resource group when its PR closes. The clientSecret is a
+  **second** credential appended to the same service principal (via
+  `az ad app credential reset --append`), so the Azure DevOps service connection's own secret
+  keeps working independently. *Not in git.*
 - **Storage account key** — **not stored anywhere**; the pipeline **fetches it at runtime**
   (`az storage account keys list`) and uses it only to upload the frontend, then discards it.
 - **Local development DB password** — in `appsettings.Development.json`, which is
