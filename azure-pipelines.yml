@@ -421,3 +421,33 @@ stages:
                   --output none
                 echo "Frontend uploaded to $(frontendUrl)"
               workingDirectory: 'weather-frontend'
+
+          # ----------------------------------------------------------------
+          # Post the live URLs as a comment on the pull request.
+          # ----------------------------------------------------------------
+          # A reviewer can then click straight through to the running branch
+          # environment. Uses the GitHub API, authenticated with a personal
+          # access token stored as the secret variable githubToken. Python builds
+          # the JSON body so newlines and quoting are handled safely. Azure
+          # supplies the PR number and repo (owner/name) for free in a PR build.
+          - script: |
+              set -euo pipefail
+              COMMENT=$(python3 - <<'EOF'
+              import json, os
+              body = (
+                  "\U0001F680 **Branch environment deployed**\n\n"
+                  f"- Frontend: {os.environ['FRONTEND_URL']}\n"
+                  f"- Backend: {os.environ['APP_URL']}\n"
+              )
+              print(json.dumps({"body": body}))
+              EOF
+              )
+              curl -sf -X POST \
+                -H "Authorization: Bearer $(githubToken)" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/$(Build.Repository.Name)/issues/$(System.PullRequest.PullRequestNumber)/comments" \
+                -d "$COMMENT"
+            displayName: 'Comment the live URL on the PR'
+            env:
+              FRONTEND_URL: $(frontendUrl)
+              APP_URL: $(appUrl)
