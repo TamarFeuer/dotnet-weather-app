@@ -32,6 +32,22 @@ trigger:
       - 'docs/**'
       - '.gitignore'
 
+# WHEN (part 2): also run on a pull request that TARGETS main. This is what makes
+# the Deploy stage fire: opening a PR sets Build.Reason to 'PullRequest', which is
+# the condition the Deploy stage waits for. The branch filter matches the PR's
+# TARGET branch (what it merges into), not the source. Because this repo is on
+# GitHub, Azure Pipelines honours this pr: block by setting up a webhook. The same
+# doc/path excludes apply, so a docs-only PR does not spin up an environment.
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+
 # WHERE: a fresh, Microsoft-hosted Ubuntu machine (clean and reproducible -
 # nobody's local mess is involved). Each job gets its own machine.
 pool:
