@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { environment } from '../environments/environment';
 
 // The shape of the data the API returns for a month (matches the backend's
 // TypicalInfo record). Exported so components can use the same type.
@@ -19,7 +20,7 @@ export interface TypicalInfo {
 // C# AddScoped registrations.
 @Injectable({ providedIn: 'root' })
 export class TypicalService {
-	private readonly apiUrl = 'http://localhost:5151/api/weather/typical';
+	private readonly apiUrl = `${environment.apiBaseUrl}/typical`;
 
 	// The other side of dependency injection: this service RECEIVES HttpClient
 	// through its constructor (Angular supplies it automatically) - exactly like

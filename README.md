@@ -194,7 +194,7 @@ seeded driver by changing that one line.
 docker run --name weather-postgres \
   -e POSTGRES_USER=weather \
   -e POSTGRES_PASSWORD=weather \
-  -e POSTGRES_DB=weatherapi \
+  -e POSTGRES_DB=weatherdb \
   -p 5432:5432 \
   -d postgres:17
 ```
@@ -248,9 +248,13 @@ and, on a failure, the exact assertion that broke.
 
 The tests earn their keep: they caught a bug where the coordinates were formatted
 using the machine's locale, so a Dutch machine would have sent `52,37` instead of
-`52.37` and Open-Meteo would have rejected it. The app worked fine on the build
-agent, which runs an English locale. No amount of running the app would have found
-that.
+`52.37`. Open-Meteo does not reject that - it reads the comma as a coordinate-list
+separator, so `52,37` becomes the two latitudes `[52, 37]` and it returns `200 OK`
+for two wrong locations. The app expects a single location, so it cannot parse that
+two-element response and the forecast request fails - and all of it only on a machine
+with a comma decimal separator. The app worked fine on the build agent, which runs an
+English locale, so no amount of running the app there would have found it; a unit test
+that forces a comma-locale is what caught it.
 
 This is a DevSecOps setup that is still being built out. Still to come: quality
 gates (a pull request may only merge if the pipeline is green) and security
@@ -262,7 +266,7 @@ When the SQL driver is active, you can look inside PostgreSQL with `psql`, which
 ships inside the container, so nothing needs installing:
 
 ```bash
-docker exec -it weather-postgres psql -U weather -d weatherapi -c 'SELECT * FROM "Temperatures";'
+docker exec -it weather-postgres psql -U weather -d weatherdb -c 'SELECT * FROM "Temperatures";'
 ```
 
 The double quotes around `"Temperatures"` are not optional: PostgreSQL folds

@@ -17,13 +17,29 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // Register the MVC controllers (this is what makes the endpoints reachable).
 builder.Services.AddControllers();
 
-// CORS: let the Angular dev server (a different origin) call this API. Without
-// this, the browser blocks requests coming from http://localhost:4200.
-const string AngularDev = "AllowAngular";
+// CORS: let the Angular frontend (a different origin) call this API. Locally the
+// frontend is the dev server at http://localhost:4200. In the cloud it is the
+// deployed frontend on Azure Storage, whose URL differs per branch and so is
+// supplied through configuration (the Cors__AllowedOrigins environment variable,
+// set by the Bicep template). Without CORS the browser blocks these cross-origin
+// requests.
+const string FrontendCors = "AllowFrontend";
+
+// The local dev server is always allowed. The deployed frontend origin is added
+// only when configuration provides one (it is unset locally, so dev behaviour is
+// unchanged). TrimEnd drops the trailing slash Azure's web endpoint carries - a
+// CORS origin is scheme + host only and must not end in a slash.
+string[] allowedOrigins = ["http://localhost:4200"];
+string? deployedFrontend = builder.Configuration["Cors:AllowedOrigins"];
+if (!string.IsNullOrWhiteSpace(deployedFrontend))
+{
+    allowedOrigins = [.. allowedOrigins, deployedFrontend.TrimEnd('/')];
+}
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy(AngularDev, policy =>
-        policy.WithOrigins("http://localhost:4200")
+    options.AddPolicy(FrontendCors, policy =>
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod());
 });
@@ -99,7 +115,7 @@ using (IServiceScope scope = app.Services.CreateScope())
     db.Database.Migrate();
 }
 
-app.UseCors(AngularDev);   // apply the CORS policy (must come before MapControllers)
+app.UseCors(FrontendCors);   // apply the CORS policy (must come before MapControllers)
 app.MapControllers();   // hooks the controller routes into the request pipeline
 app.Run();
 

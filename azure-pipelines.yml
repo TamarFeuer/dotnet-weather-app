@@ -32,175 +32,433 @@ trigger:
       - 'docs/**'
       - '.gitignore'
 
+# WHEN (part 2): also run on a pull request that TARGETS main. This is what makes
+# the Deploy stage fire: opening a PR sets Build.Reason to 'PullRequest', which is
+# the condition the Deploy stage waits for. The branch filter matches the PR's
+# TARGET branch (what it merges into), not the source. Because this repo is on
+# GitHub, Azure Pipelines honours this pr: block by setting up a webhook. The same
+# doc/path excludes apply, so a docs-only PR does not spin up an environment.
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+
 # WHERE: a fresh, Microsoft-hosted Ubuntu machine (clean and reproducible -
 # nobody's local mess is involved). Each job gets its own machine.
 pool:
   vmImage: 'ubuntu-latest'
 
-jobs:
+# The pipeline is organised into STAGES: big boxes of work that run in order. A
+# stage groups one or more jobs. Today there is a single stage (Build), which
+# just holds the build-and-test jobs we already had. The point of naming it is
+# that the next step adds a second stage (Deploy) that runs AFTER this one, only
+# when a pull request is open.
+stages:
   # ==========================================================================
-  # JOB 1 - BACKEND (.NET / C#)
+  # STAGE 1 - BUILD AND TEST
   # ==========================================================================
-  - job: Backend
-    displayName: 'Backend: build and test'
-    steps:
-      # Install the .NET 10 SDK on the build machine.
-      - task: UseDotNet@2
-        displayName: 'Install .NET 10 SDK'
-        inputs:
-          packageType: 'sdk'
-          version: '10.0.x'
+  # Everything that proves the code is correct: build both halves and run every
+  # test. If anything here fails, the Deploy stage (added next) never runs.
+  - stage: Build
+    displayName: 'Build and test'
+    jobs:
+      # ======================================================================
+      # JOB 1 - BACKEND (.NET / C#)
+      # ======================================================================
+      - job: Backend
+        displayName: 'Backend: build and test'
+        steps:
+          # Install the .NET 10 SDK on the build machine.
+          - task: UseDotNet@2
+            displayName: 'Install .NET 10 SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '10.0.x'
 
-      # Restore the NuGet dependencies (e.g. Npgsql.EntityFrameworkCore.PostgreSQL).
-      - script: dotnet restore
-        displayName: 'Restore dependencies'
-        workingDirectory: 'weather-backend'
+          # Restore the NuGet dependencies (e.g. Npgsql.EntityFrameworkCore.PostgreSQL).
+          - script: dotnet restore
+            displayName: 'Restore dependencies'
+            workingDirectory: 'weather-backend'
 
-      # Build in Release. If this fails, this job fails.
-      - script: dotnet build --configuration Release --no-restore
-        displayName: 'Build backend'
-        workingDirectory: 'weather-backend'
+          # Build in Release. If this fails, this job fails.
+          - script: dotnet build --configuration Release --no-restore
+            displayName: 'Build backend'
+            workingDirectory: 'weather-backend'
 
-      # Run the xUnit tests.
-      #   --logger  writes the results to a .trx file (Microsoft's test report
-      #             format) instead of only printing them, so the next step can
-      #             hand them to Azure.
-      #   --collect gathers code coverage: which lines of the app were actually
-      #             executed by the tests. It lands as a Cobertura XML file.
-      - script: >
-          dotnet test --configuration Release
-          --logger "trx;LogFileName=backend-tests.trx"
-          --collect:"XPlat Code Coverage"
-          --results-directory "$(Agent.TempDirectory)/test-results"
-        displayName: 'Test backend'
-        workingDirectory: 'weather-backend-unit-tests'
+          # Run the xUnit tests.
+          #   --logger  writes the results to a .trx file (Microsoft's test report
+          #             format) instead of only printing them, so the next step can
+          #             hand them to Azure.
+          #   --collect gathers code coverage: which lines of the app were actually
+          #             executed by the tests. It lands as a Cobertura XML file.
+          - script: >
+              dotnet test --configuration Release
+              --logger "trx;LogFileName=backend-tests.trx"
+              --collect:"XPlat Code Coverage"
+              --results-directory "$(Agent.TempDirectory)/test-results"
+            displayName: 'Test backend'
+            workingDirectory: 'weather-backend-unit-tests'
 
-      # Publish the results, which is what fills the "Tests" tab: every test by
-      # name, its duration, and for a failure the exact message.
-      #
-      # condition: succeededOrFailed() is the crucial bit. Azure normally SKIPS
-      # a step once an earlier step in the job has failed. But a failing test run
-      # is precisely when you most want the report. Without this condition, a red
-      # build would publish nothing and you would be left digging through logs.
-      - task: PublishTestResults@2
-        displayName: 'Publish backend test results'
-        condition: succeededOrFailed()
-        inputs:
-          testResultsFormat: 'VSTest'
-          testResultsFiles: '**/backend-tests.trx'
-          searchFolder: '$(Agent.TempDirectory)/test-results'
-          testRunTitle: 'Backend (xUnit)'
+          # Publish the results, which is what fills the "Tests" tab: every test by
+          # name, its duration, and for a failure the exact message.
+          #
+          # condition: succeededOrFailed() is the crucial bit. Azure normally SKIPS
+          # a step once an earlier step in the job has failed. But a failing test run
+          # is precisely when you most want the report. Without this condition, a red
+          # build would publish nothing and you would be left digging through logs.
+          - task: PublishTestResults@2
+            displayName: 'Publish backend test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/backend-tests.trx'
+              searchFolder: '$(Agent.TempDirectory)/test-results'
+              testRunTitle: 'Backend (xUnit)'
 
-      # Publish the coverage report, which fills the "Code Coverage" tab.
-      # dotnet test drops it in a GUID-named subfolder, hence the ** wildcard.
-      - task: PublishCodeCoverageResults@2
-        displayName: 'Publish backend code coverage'
-        condition: succeededOrFailed()
-        inputs:
-          summaryFileLocation: '$(Agent.TempDirectory)/test-results/**/coverage.cobertura.xml'
+          # Publish the coverage report, which fills the "Code Coverage" tab.
+          # dotnet test drops it in a GUID-named subfolder, hence the ** wildcard.
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish backend code coverage'
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: '$(Agent.TempDirectory)/test-results/**/coverage.cobertura.xml'
 
-      # Integration tests. These boot the real app against a throwaway PostgreSQL
-      # container that Testcontainers starts on the agent. Microsoft-hosted Ubuntu
-      # agents ship with Docker, so this works with no extra setup, and the
-      # container is destroyed when the job ends.
-      #
-      # They run as a separate step, after the unit tests, because they are slower
-      # and need Docker. A failure here still fails the whole job.
-      - script: >
-          dotnet test --configuration Release
-          --logger "trx;LogFileName=integration-tests.trx"
-          --results-directory "$(Agent.TempDirectory)/test-results"
-        displayName: 'Integration-test backend'
-        workingDirectory: 'weather-backend-integration-tests'
+          # Integration tests. These boot the real app against a throwaway PostgreSQL
+          # container that Testcontainers starts on the agent. Microsoft-hosted Ubuntu
+          # agents ship with Docker, so this works with no extra setup, and the
+          # container is destroyed when the job ends.
+          #
+          # They run as a separate step, after the unit tests, because they are slower
+          # and need Docker. A failure here still fails the whole job.
+          - script: >
+              dotnet test --configuration Release
+              --logger "trx;LogFileName=integration-tests.trx"
+              --results-directory "$(Agent.TempDirectory)/test-results"
+            displayName: 'Integration-test backend'
+            workingDirectory: 'weather-backend-integration-tests'
 
-      - task: PublishTestResults@2
-        displayName: 'Publish integration test results'
-        condition: succeededOrFailed()
-        inputs:
-          testResultsFormat: 'VSTest'
-          testResultsFiles: '**/integration-tests.trx'
-          searchFolder: '$(Agent.TempDirectory)/test-results'
-          testRunTitle: 'Backend integration (Testcontainers)'
+          - task: PublishTestResults@2
+            displayName: 'Publish integration test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/integration-tests.trx'
+              searchFolder: '$(Agent.TempDirectory)/test-results'
+              testRunTitle: 'Backend integration (Testcontainers)'
+
+      # ======================================================================
+      # JOB 2 - FRONTEND (Angular / TypeScript)
+      # ======================================================================
+      - job: Frontend
+        displayName: 'Frontend: build and test'
+        steps:
+          # Install Node.js. This is the frontend twin of UseDotNet: the machine
+          # does not ship with the version we want, so the pipeline installs it.
+          # (UseNode@1 replaces the deprecated NodeTool@0.)
+          #
+          # The version has to MATCH the one used locally. package-lock.json was
+          # generated by npm 11 (which ships with Node 24). An older npm reads that
+          # same lock file as incomplete and npm ci fails with "Missing ... from
+          # lock file". Pinning the dependencies is not enough: the tool that reads
+          # the lock file has to be pinned too.
+          - task: UseNode@1
+            displayName: 'Install Node.js 24'
+            inputs:
+              version: '24.x'
+
+          # npm ci, not npm install. It installs exactly what package-lock.json
+          # pins and fails if package.json and the lock file disagree. That makes
+          # the build reproducible instead of "whatever npm resolved today".
+          - script: npm ci
+            displayName: 'Install dependencies'
+            workingDirectory: 'weather-frontend'
+
+          # Build the production bundle. If Angular or TypeScript does not compile,
+          # this job fails.
+          - script: npm run build
+            displayName: 'Build frontend'
+            workingDirectory: 'weather-frontend'
+
+          # Run the unit tests.
+          #
+          # --watch=false is essential. By default ng test runs the suite and then
+          # STAYS OPEN, waiting for a file to change so it can re-run. That is useful
+          # while developing, but in a pipeline the step would never finish and the
+          # job would hang until it times out. The extra "--" tells npm to pass the
+          # flags through to ng rather than swallow them itself.
+          #
+          # The reporters do two things at once: "junit" writes a machine-readable
+          # report for Azure (--output-file applies to the FIRST reporter, hence the
+          # order), and "default" keeps the human-readable output in the log.
+          #
+          # --coverage records which lines the tests actually executed, in the same
+          # Cobertura format the backend produces, so both land in one report.
+          #
+          # --coverage-include is what makes that number honest. By default the tool
+          # only reports files a test happened to load, so a file nobody tests at all
+          # stays INVISIBLE instead of counting as zero, and the percentage flatters
+          # you. Naming every source file forces the untested ones to show up.
+          - script: >
+              npm test --
+              --watch=false
+              --reporters=junit
+              --reporters=default
+              --output-file=junit-results.xml
+              --coverage
+              --coverage-reporters=cobertura
+              --coverage-include='src/app/**/*.ts'
+              --coverage-include='src/app/**/*.html'
+            displayName: 'Test frontend'
+            workingDirectory: 'weather-frontend'
+
+          # Publish the results into the same "Tests" tab as the backend ones.
+          # succeededOrFailed() again: publish the report even when tests are red,
+          # because that is exactly when you need it.
+          - task: PublishTestResults@2
+            displayName: 'Publish frontend test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'weather-frontend/junit-results.xml'
+              testRunTitle: 'Frontend (Vitest)'
+
+          # Publish the coverage report into the same "Code Coverage" tab.
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish frontend code coverage'
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: 'weather-frontend/coverage/**/cobertura-coverage.xml'
 
   # ==========================================================================
-  # JOB 2 - FRONTEND (Angular / TypeScript)
+  # STAGE 2 - DEPLOY BRANCH ENVIRONMENT
   # ==========================================================================
-  - job: Frontend
-    displayName: 'Frontend: build and test'
-    steps:
-      # Install Node.js. This is the frontend twin of UseDotNet: the machine
-      # does not ship with the version we want, so the pipeline installs it.
-      # (UseNode@1 replaces the deprecated NodeTool@0.)
-      #
-      # The version has to MATCH the one used locally. package-lock.json was
-      # generated by npm 11 (which ships with Node 24). An older npm reads that
-      # same lock file as incomplete and npm ci fails with "Missing ... from
-      # lock file". Pinning the dependencies is not enough: the tool that reads
-      # the lock file has to be pinned too.
-      - task: UseNode@1
-        displayName: 'Install Node.js 24'
-        inputs:
-          version: '24.x'
+  # Stand up an isolated copy of the app in Azure, named after the branch. It
+  # runs ONLY for a pull request (Build.Reason), and only if the Build stage was
+  # green (dependsOn + succeeded). So a normal push to main never deploys here,
+  # and broken code never reaches Azure.
+  - stage: Deploy
+    displayName: 'Deploy branch environment'
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - job: Deploy
+        displayName: 'Deploy infrastructure and app'
+        steps:
+          # The Bicep template lives in the repo, so we need the source on the agent.
+          - checkout: self
 
-      # npm ci, not npm install. It installs exactly what package-lock.json
-      # pins and fails if package.json and the lock file disagree. That makes
-      # the build reproducible instead of "whatever npm resolved today".
-      - script: npm ci
-        displayName: 'Install dependencies'
-        workingDirectory: 'weather-frontend'
+          # ----------------------------------------------------------------
+          # Turn the branch name into a safe Azure resource name (Emrah's SLUG).
+          # ----------------------------------------------------------------
+          # Azure resource names cannot contain slashes or uppercase letters, so
+          # 'feature/branch-deploy' must become something like 'branch-deploy'.
+          # We store it as a normal pipeline variable so the steps below reuse it.
+          - task: Bash@3
+            displayName: 'Compute a safe branch slug'
+            inputs:
+              targetType: inline
+              script: |
+                set -euo pipefail
+                # On a PR build the real branch is in System.PullRequest.SourceBranch;
+                # fall back to Build.SourceBranch for a manual run.
+                RAW="$(System.PullRequest.SourceBranch)"
+                if [ -z "$RAW" ]; then RAW="$(Build.SourceBranch)"; fi
+                RAW="${RAW#refs/heads/}"
+                # lowercase, replace non-alphanumerics with hyphens, squeeze and trim
+                # hyphens, then cap the length so the resource names stay well within
+                # Azure's limits.
+                SLUG=$(echo "$RAW" \
+                  | tr '[:upper:]' '[:lower:]' \
+                  | sed 's/[^a-z0-9]/-/g; s/-\{2,\}/-/g; s/^-//; s/-$//')
+                SLUG="${SLUG:0:20}"
+                SLUG="${SLUG%-}"
+                echo "Branch '$RAW' -> slug '$SLUG'"
+                # Publish it as a pipeline variable the later steps can read as $(branchSlug).
+                echo "##vso[task.setvariable variable=branchSlug]$SLUG"
 
-      # Build the production bundle. If Angular or TypeScript does not compile,
-      # this job fails.
-      - script: npm run build
-        displayName: 'Build frontend'
-        workingDirectory: 'weather-frontend'
+          # ----------------------------------------------------------------
+          # Deploy the infrastructure: resource group + Bicep template.
+          # ----------------------------------------------------------------
+          # Authenticated through the azure-weatherapi-deploy service connection.
+          # This is the exact pair of commands we ran by hand, now automated:
+          # create the resource group, then deploy main.bicep into it. The database
+          # password comes from the secret pipeline variable, never from the file.
+          - task: AzureCLI@2
+            displayName: 'Deploy infrastructure (resource group + Bicep)'
+            inputs:
+              azureSubscription: 'azure-weatherapi-deploy'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                RG="rg-weatherapi-$(branchSlug)"
+                LOCATION="francecentral"
+                echo "Ensuring resource group $RG in $LOCATION..."
+                az group create --name "$RG" --location "$LOCATION" --output none
+                echo "Deploying infra/main.bicep..."
+                az deployment group create \
+                  --resource-group "$RG" \
+                  --name "weatherapi-$(branchSlug)" \
+                  --template-file infra/main.bicep \
+                  --parameters branchName="$(branchSlug)" databasePassword="$DB_PASSWORD" \
+                  --output none
+                # Read the outputs back so the code-deploy step knows which app to
+                # target, and so we can print where the environment is running.
+                APP_NAME=$(az deployment group show --resource-group "$RG" \
+                  --name "weatherapi-$(branchSlug)" \
+                  --query properties.outputs.appName.value -o tsv)
+                APP_URL=$(az deployment group show --resource-group "$RG" \
+                  --name "weatherapi-$(branchSlug)" \
+                  --query properties.outputs.appUrl.value -o tsv)
+                FRONTEND_URL=$(az deployment group show --resource-group "$RG" \
+                  --name "weatherapi-$(branchSlug)" \
+                  --query properties.outputs.frontendUrl.value -o tsv)
+                FRONTEND_STORAGE=$(az deployment group show --resource-group "$RG" \
+                  --name "weatherapi-$(branchSlug)" \
+                  --query properties.outputs.frontendStorageName.value -o tsv)
+                echo "Infrastructure deployed."
+                echo "  Backend:  $APP_URL"
+                echo "  Frontend: $FRONTEND_URL"
+                echo "##vso[task.setvariable variable=appName]$APP_NAME"
+                echo "##vso[task.setvariable variable=appUrl]$APP_URL"
+                echo "##vso[task.setvariable variable=frontendUrl]$FRONTEND_URL"
+                echo "##vso[task.setvariable variable=frontendStorage]$FRONTEND_STORAGE"
+            env:
+              # Pass the DB password as an env var rather than via the
+              # $(databasePassword) macro. Macro substitution pastes the value into
+              # the script as raw text, so a '$' inside the password would be
+              # re-parsed by bash as a variable reference (and set -u then fails).
+              # An env var expands to its literal value without that re-parsing.
+              DB_PASSWORD: $(databasePassword)
 
-      # Run the unit tests.
-      #
-      # --watch=false is essential. By default ng test runs the suite and then
-      # STAYS OPEN, waiting for a file to change so it can re-run. That is useful
-      # while developing, but in a pipeline the step would never finish and the
-      # job would hang until it times out. The extra "--" tells npm to pass the
-      # flags through to ng rather than swallow them itself.
-      #
-      # The reporters do two things at once: "junit" writes a machine-readable
-      # report for Azure (--output-file applies to the FIRST reporter, hence the
-      # order), and "default" keeps the human-readable output in the log.
-      #
-      # --coverage records which lines the tests actually executed, in the same
-      # Cobertura format the backend produces, so both land in one report.
-      #
-      # --coverage-include is what makes that number honest. By default the tool
-      # only reports files a test happened to load, so a file nobody tests at all
-      # stays INVISIBLE instead of counting as zero, and the percentage flatters
-      # you. Naming every source file forces the untested ones to show up.
-      - script: >
-          npm test --
-          --watch=false
-          --reporters=junit
-          --reporters=default
-          --output-file=junit-results.xml
-          --coverage
-          --coverage-reporters=cobertura
-          --coverage-include='src/app/**/*.ts'
-          --coverage-include='src/app/**/*.html'
-        displayName: 'Test frontend'
-        workingDirectory: 'weather-frontend'
+          # ----------------------------------------------------------------
+          # Build and publish the API, then push it to the App Service.
+          # ----------------------------------------------------------------
+          # This Deploy job runs on its own fresh machine, so it needs the .NET
+          # SDK installed before it can publish (the Build stage's machine is gone).
+          - task: UseDotNet@2
+            displayName: 'Install .NET 10 SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '10.0.x'
 
-      # Publish the results into the same "Tests" tab as the backend ones.
-      # succeededOrFailed() again: publish the report even when tests are red,
-      # because that is exactly when you need it.
-      - task: PublishTestResults@2
-        displayName: 'Publish frontend test results'
-        condition: succeededOrFailed()
-        inputs:
-          testResultsFormat: 'JUnit'
-          testResultsFiles: 'weather-frontend/junit-results.xml'
-          testRunTitle: 'Frontend (Vitest)'
+          # dotnet publish produces a self-contained folder of the compiled app,
+          # ready to run - the cloud equivalent of the build output we test locally.
+          - script: >
+              dotnet publish --configuration Release
+              --output "$(Build.ArtifactStagingDirectory)/app"
+            displayName: 'Publish the API'
+            workingDirectory: 'weather-backend'
 
-      # Publish the coverage report into the same "Code Coverage" tab.
-      - task: PublishCodeCoverageResults@2
-        displayName: 'Publish frontend code coverage'
-        condition: succeededOrFailed()
-        inputs:
-          summaryFileLocation: 'weather-frontend/coverage/**/cobertura-coverage.xml'
+          # Upload that folder to the App Service, through the same service
+          # connection. Azure zips the folder, swaps it in, and restarts the app.
+          # On startup the app reads its connection string (wired in by the Bicep)
+          # and runs its EF Core migrations, exactly like the integration tests.
+          - task: AzureWebApp@1
+            displayName: 'Deploy app code to the App Service'
+            inputs:
+              azureSubscription: 'azure-weatherapi-deploy'
+              appType: 'webAppLinux'
+              appName: '$(appName)'
+              package: '$(Build.ArtifactStagingDirectory)/app'
+              runtimeStack: 'DOTNETCORE|10.0'
+
+          # ----------------------------------------------------------------
+          # Build the frontend pointed at THIS branch's backend, then upload it.
+          # ----------------------------------------------------------------
+          # Replace the placeholder in environment.prod.ts with the real backend
+          # URL (plus the /api/weather path the services expect). A production
+          # build then bakes this value in via the fileReplacements rule.
+          # A '#' sed delimiter is used because the URL contains slashes.
+          - script: |
+              set -euo pipefail
+              sed -i "s#API_BASE_URL_PLACEHOLDER#$(appUrl)/api/weather#" \
+                src/environments/environment.prod.ts
+              echo "Frontend will call: $(appUrl)/api/weather"
+            displayName: 'Inject the backend URL into the frontend'
+            workingDirectory: 'weather-frontend'
+
+          - task: UseNode@1
+            displayName: 'Install Node.js 24'
+            inputs:
+              version: '24.x'
+
+          - script: npm ci
+            displayName: 'Install frontend dependencies'
+            workingDirectory: 'weather-frontend'
+
+          - script: npm run build
+            displayName: 'Build the frontend'
+            workingDirectory: 'weather-frontend'
+
+          # Enable the static website and upload the built files. Authenticated
+          # through the same service connection. The service principal is a
+          # Contributor, which may LIST the storage keys (a control-plane action)
+          # but does not by itself have blob DATA access - so we fetch a key and
+          # use it for the two data-plane commands below.
+          - task: AzureCLI@2
+            displayName: 'Enable static website and upload the frontend'
+            inputs:
+              azureSubscription: 'azure-weatherapi-deploy'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                RG="rg-weatherapi-$(branchSlug)"
+                ACCOUNT="$(frontendStorage)"
+                KEY=$(az storage account keys list --resource-group "$RG" \
+                  --account-name "$ACCOUNT" --query "[0].value" -o tsv)
+                echo "Enabling static website on $ACCOUNT..."
+                az storage blob service-properties update \
+                  --account-name "$ACCOUNT" --account-key "$KEY" \
+                  --static-website --index-document index.html \
+                  --404-document index.html \
+                  --output none
+                echo "Uploading the built frontend to \$web..."
+                az storage blob upload-batch \
+                  --account-name "$ACCOUNT" --account-key "$KEY" \
+                  --destination '$web' \
+                  --source dist/weather-frontend/browser \
+                  --overwrite \
+                  --output none
+                echo "Frontend uploaded to $(frontendUrl)"
+              workingDirectory: 'weather-frontend'
+
+          # ----------------------------------------------------------------
+          # Post the live URLs as a comment on the pull request.
+          # ----------------------------------------------------------------
+          # A reviewer can then click straight through to the running branch
+          # environment. Uses the GitHub API, authenticated with a personal
+          # access token stored as the secret variable githubToken. Python builds
+          # the JSON body so newlines and quoting are handled safely. Azure
+          # supplies the PR number and repo (owner/name) for free in a PR build.
+          - script: |
+              set -euo pipefail
+              COMMENT=$(python3 - <<'EOF'
+              import json, os
+              body = (
+                  "\U0001F680 **Branch environment deployed**\n\n"
+                  f"- Frontend: {os.environ['FRONTEND_URL']}\n"
+                  f"- Backend: {os.environ['APP_URL']}\n"
+              )
+              print(json.dumps({"body": body}))
+              EOF
+              )
+              curl -sf -X POST \
+                -H "Authorization: Bearer $(githubToken)" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/$(Build.Repository.Name)/issues/$(System.PullRequest.PullRequestNumber)/comments" \
+                -d "$COMMENT"
+            displayName: 'Comment the live URL on the PR'
+            # The comment is a nice-to-have. If it fails (missing/expired token,
+            # GitHub hiccup), warn but do not fail the whole deploy - the
+            # environment is already up and its URLs are in the logs above.
+            continueOnError: true
+            env:
+              FRONTEND_URL: $(frontendUrl)
+              APP_URL: $(appUrl)
