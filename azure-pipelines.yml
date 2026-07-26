@@ -448,6 +448,10 @@ stages:
                 "https://api.github.com/repos/$(Build.Repository.Name)/issues/$(System.PullRequest.PullRequestNumber)/comments" \
                 -d "$COMMENT"
             displayName: 'Comment the live URL on the PR'
+            # The comment is a nice-to-have. If it fails (missing/expired token,
+            # GitHub hiccup), warn but do not fail the whole deploy - the
+            # environment is already up and its URLs are in the logs above.
+            continueOnError: true
             env:
               FRONTEND_URL: $(frontendUrl)
               APP_URL: $(appUrl)
