@@ -1,0 +1,60 @@
+# ============================================================================
+# Teardown - delete a branch's Azure environment when its pull request closes
+# ============================================================================
+# The Azure DevOps pipeline deploys a branch environment on PR open/update, but
+# its pr: trigger does NOT fire when a PR closes. GitHub Actions does: this
+# workflow runs when a pull request is closed (merged OR abandoned), works out
+# the same branch slug the deploy used, and deletes that branch's resource group
+# - so nothing keeps costing money after the PR is done.
+#
+# It authenticates to Azure as the same service principal the deploy uses, whose
+# credentials are stored as the GitHub secret AZURE_CREDENTIALS (a JSON blob with
+# clientId, clientSecret, subscriptionId, tenantId). Replacing that secret with
+# OIDC / workload identity federation is a good later hardening step.
+name: Teardown branch environment
+
+# WHEN: a pull request is closed - whether it was merged or just abandoned.
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  teardown:
+    runs-on: ubuntu-latest
+    steps:
+      # Turn the PR's SOURCE branch into the exact same slug the deploy used:
+      # lowercase, non-alphanumerics -> hyphens, squeezed and trimmed, then capped
+      # at 20 characters. github.head_ref is the source branch on a PR event.
+      - name: Compute the branch slug
+        id: slug
+        run: |
+          set -euo pipefail
+          RAW="${{ github.head_ref }}"
+          SLUG=$(echo "$RAW" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed 's/[^a-z0-9]/-/g; s/-\{2,\}/-/g; s/^-//; s/-$//')
+          SLUG="${SLUG:0:20}"
+          SLUG="${SLUG%-}"
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+          echo "Branch '$RAW' -> slug '$SLUG'"
+
+      # Log in to Azure as the service principal (secret in AZURE_CREDENTIALS).
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Delete the branch's resource group if it exists. Checking first means a
+      # missing group (e.g. the deploy never ran) is a clean no-op, not a failure.
+      # The az CLI is pre-installed on the runner and already authenticated above.
+      - name: Delete the branch resource group
+        run: |
+          set -euo pipefail
+          RG="rg-weatherapi-${{ steps.slug.outputs.slug }}"
+          if [ "$(az group exists --name "$RG")" = "true" ]; then
+            echo "Deleting resource group $RG ..."
+            az group delete --name "$RG" --yes
+            echo "Deleted $RG."
+          else
+            echo "Resource group $RG does not exist; nothing to tear down."
+          fi
