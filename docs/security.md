@@ -22,6 +22,10 @@
 - **Database admin password** — supplied to the pipeline as a **secret pipeline variable**
   (`databasePassword`), injected into the Bicep deployment at runtime and baked into the App
   Service's connection string. *Not in git.*
+- **GitHub token (`githubToken`)** — a fine-grained personal access token, scoped to only this
+  repository with **Pull requests: read and write**, stored as a **secret pipeline variable**.
+  The pipeline uses it to post the deployed URLs as a comment on the pull request. Least
+  privilege caps the blast radius if it leaks. *Not in git.*
 - **Storage account key** — **not stored anywhere**; the pipeline **fetches it at runtime**
   (`az storage account keys list`) and uses it only to upload the frontend, then discards it.
 - **Local development DB password** — in `appsettings.Development.json`, which is
